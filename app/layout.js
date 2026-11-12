@@ -1,9 +1,28 @@
 import "./globals.css";
 
+const SITE = "https://returnlinks.com";
+const TITLE = "ReturnLink | 1인 마켓 교환·반품 포털";
+const DESC = "인스타그램 1인 마켓의 카톡 CS를 줄여주는 교환·반품 접수 포털, 리턴링크. 링크 하나로 접수하고 지금은 무료예요.";
+
 export const metadata = {
-  title: "ReturnLink | 1인 마켓 교환·반품 포털",
-  description:
-    "인스타그램 1인 마켓의 카톡 CS를 줄여주는 교환·반품 접수 포털, 리턴링크",
+  metadataBase: new URL(SITE),
+  title: TITLE,
+  description: DESC,
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    siteName: "ReturnLink",
+    title: TITLE,
+    description: DESC,
+    url: SITE,
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "ReturnLink 리턴링크" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESC,
+    images: ["/og.png"],
+  },
 };
 
 export const viewport = {

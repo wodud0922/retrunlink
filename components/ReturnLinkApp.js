@@ -471,7 +471,7 @@ function fontOf(id) {
 
 function splitOptions(text) {
   return (text || "")
-    .split(",")
+    .split(/[,，/·、|\n]+/)
     .map((t) => t.trim())
     .filter(Boolean);
 }
@@ -4147,7 +4147,7 @@ function SettingsModal({ settings, initialTab, onClose, onSave, onReset, resetLa
           {d.productMode === "list" ? (
             <Box2
               title={"등록 상품 " + d.products.length + "개"}
-              hint="상품마다 색상 한 줄, 사이즈 한 줄만 적으면 돼요(쉼표로 구분). 비슷한 상품은 복제 버튼으로 옵션째 복사하세요."
+              hint="상품마다 색상 한 줄, 사이즈 한 줄만 적으면 돼요(쉼표나 / 로 구분). 비슷한 상품은 복제 버튼으로 옵션째 복사하세요."
             >
               <input
                 ref={productImgRef}
@@ -4185,14 +4185,14 @@ function SettingsModal({ settings, initialTab, onClose, onSave, onReset, resetLa
                         <input
                           value={p.colors || ""}
                           onChange={(e) => setItem("products", p.id, "colors", e.target.value)}
-                          placeholder="색상: 블랙, 아이보리"
+                          placeholder="색상: 블랙 / 아이보리"
                           aria-label="색상"
                           className="w-0 min-w-0 flex-1 rounded-md border border-neutral-200 px-2.5 py-1.5 text-[13px] text-neutral-600 outline-none focus:border-neutral-900"
                         />
                         <input
                           value={p.sizes || ""}
                           onChange={(e) => setItem("products", p.id, "sizes", e.target.value)}
-                          placeholder="사이즈: S, M, L"
+                          placeholder="사이즈: S / M / L"
                           aria-label="사이즈"
                           className="w-0 min-w-0 flex-1 rounded-md border border-neutral-200 px-2.5 py-1.5 text-[13px] text-neutral-600 outline-none focus:border-neutral-900"
                         />

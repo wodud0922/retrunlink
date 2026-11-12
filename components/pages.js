@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { supabase, rowToRequest, requestToData } from "../lib/supabase";
+import { supabase, rowToRequest, requestToData, ONLINE_CHANNEL } from "../lib/supabase";
 import { AdminView, CustomerView, Landing, SignupFlow, Toast, useToast } from "./ReturnLinkApp";
 
 const TRACKING_ON = process.env.NEXT_PUBLIC_TRACKING === "on";
@@ -21,6 +21,44 @@ function isClosedAndOld(r) {
   if (r.decision === "rejected") return daysSince(r.date) >= KEEP_DAYS;
   if (r.paid && r.pickup === "done" && r.finished) return daysSince(r.finishedDate || r.date) >= KEEP_DAYS;
   return false;
+}
+
+// 지금 접속 중인 사람을 운영실에 알려요 (실시간 접속자 수)
+
+function useOnline(kind, handle) {
+  useEffect(() => {
+    if (!supabase || !kind) return undefined;
+    const key = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const ch = supabase.channel(ONLINE_CHANNEL, { config: { presence: { key } } });
+    ch.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        ch.track({ kind, handle: handle || "", at: new Date().toISOString() }).catch(() => {});
+      }
+    });
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [kind, handle]);
+}
+
+// 방문 수는 같은 창에서 한 번만 세요 (새로고침해도 다시 안 셈)
+function countVisitOnce(key, fn) {
+  try {
+    if (window.sessionStorage.getItem("rl-visit-" + key)) return;
+    window.sessionStorage.setItem("rl-visit-" + key, "1");
+  } catch (e) {
+    /* 사파리 개인정보 보호 모드 등에서는 그냥 셉니다 */
+  }
+  Promise.resolve(fn()).catch(() => {});
+}
+
+function useVisit(key, fn) {
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
+  useEffect(() => {
+    if (!supabase || !key) return;
+    countVisitOnce(key, () => fnRef.current());
+  }, [key]);
 }
 
 function Page({ children, toast }) {
@@ -58,6 +96,8 @@ function SetupNeeded() {
 export function LandingPage() {
   const router = useRouter();
   const [toast] = useToast();
+  useOnline("landing");
+  useVisit("landing", () => supabase.rpc("bump_site", { p_kind: "landing" }));
   return (
     <Page toast={toast}>
       <Landing onStart={() => router.push("/start")} />
@@ -81,6 +121,8 @@ export function StartPage() {
   const routerRef = useStableRouter();
   const router = routerRef.current;
   const [toast, showToast] = useToast();
+  useOnline("start");
+  useVisit("start", () => supabase.rpc("bump_site", { p_kind: "start" }));
   const [state, setState] = useState({ loading: true, user: null });
 
   useEffect(() => {
@@ -172,6 +214,7 @@ export function AdminPage() {
   const router = routerRef.current;
   const [toast, showToast] = useToast();
   const [shop, setShop] = useState(null);
+  useOnline(shop ? "admin" : "", shop ? shop.handle : "");
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const requestsRef = useRef([]);
@@ -349,6 +392,14 @@ export function ShopPage() {
   const handle = decodeURIComponent(raw).replace(/^@/, "").toLowerCase();
   const [toast, showToast] = useToast();
   const [state, setState] = useState({ loading: true, settings: null });
+  const found = !!state.settings;
+  useOnline(found ? "shop" : "", handle);
+  useVisit(found ? "shop-" + handle : "", () =>
+    Promise.all([
+      supabase.rpc("bump_site", { p_kind: "shop" }),
+      supabase.rpc("bump_metric", { p_handle: handle, p_kind: "view" }),
+    ])
+  );
 
   useEffect(() => {
     if (!supabase) return undefined;

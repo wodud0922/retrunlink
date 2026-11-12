@@ -68,7 +68,7 @@ security definer
 set search_path = public
 as $$
   select lower(trim(p_handle)) ~ '^[a-z0-9._]{3,20}$'
-     and lower(trim(p_handle)) not in ('admin', 'start', 'signup', 'login', 'returnlink', 'help', 'api')
+     and lower(trim(p_handle)) not in ('admin', 'start', 'signup', 'login', 'returnlink', 'help', 'api', 'ops')
      and not exists (select 1 from public.shops where handle = lower(trim(p_handle)));
 $$;
 
@@ -82,7 +82,7 @@ as $$
 declare
   v_day text := to_char(now() at time zone 'Asia/Seoul', 'YYYY.MM.DD');
 begin
-  if p_kind not in ('track', 'lookup') then
+  if p_kind not in ('track', 'lookup', 'view') then
     return;
   end if;
   update public.shops
@@ -274,3 +274,5 @@ begin
   alter publication supabase_realtime add table public.requests;
 exception when duplicate_object then null;
 end $$;
+
+-- 11) 운영실(/ops)을 쓰려면 supabase/ops.sql 도 이어서 실행하세요.

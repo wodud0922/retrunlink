@@ -4445,7 +4445,7 @@ function SettingsModal({ settings, initialTab, onClose, onSave, onReset, resetLa
 /* 소개 페이지 & 가입                                                    */
 /* ------------------------------------------------------------------ */
 
-const RESERVED_HANDLES = ["admin", "start", "signup", "login", "returnlink", "oat_studio", "help"];
+const RESERVED_HANDLES = ["admin", "start", "signup", "login", "returnlink", "oat_studio", "help", "api", "ops"];
 
 function KakaoButton({ onClick, children, className = "" }) {
   return (

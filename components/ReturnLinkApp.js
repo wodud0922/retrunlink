@@ -4801,7 +4801,7 @@ export function Landing({ onStart, onDemo }) {
     },
     {
       q: "왜 무료인가요?",
-      a: "더 나은 서비스를 위해 실제로 써 보신 사장님들의 피드백이 필요해요. 그래서 먼저 함께해 주시는 사장님 30분께는 평생 무료로 드려요. 카드 등록도 없고, 접수 개수 제한도 없어요.",
+      a: "더 나은 서비스를 위해 실제로 써 보신 사장님들의 피드백이 필요해요. 그래서 먼저 함께해 주시는 사장님 20분께는 평생 무료로 드려요. 카드 등록도 없고, 접수 개수 제한도 없어요.",
     },
     {
       q: "그만 쓰고 싶으면요?",
@@ -4961,11 +4961,11 @@ export function Landing({ onStart, onDemo }) {
                   리턴링크는 사장님들께 더 나은 서비스를 드리기 위해 실제로 써 보신 분들의 피드백이 필요해요.
                 </p>
                 <p className="mt-2 text-[14px] leading-relaxed text-neutral-700">
-                  그래서 먼저 함께해 주시는 <b className="text-emerald-700">사장님 30분께는 평생 무료</b>로 드려요. 써 보시고
+                  그래서 먼저 함께해 주시는 <b className="text-emerald-700">사장님 20분께는 평생 무료</b>로 드려요. 써 보시고
                   불편한 점이나 필요한 기능을 알려 주시면 바로 반영할게요.
                 </p>
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3">
-                  <p className="text-[13.5px] font-bold text-neutral-900">선착순 30명 · 평생 무료</p>
+                  <p className="text-[13.5px] font-bold text-neutral-900">선착순 20명 · 평생 무료</p>
                   <button
                     type="button"
                     onClick={onStart}

@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: #f5f4f1;
+  color: #171717;
+  /* 한글이 좁은 칸에서 한 글자씩 줄바꿈되지 않게 단어 단위로 끊어요 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* iOS에서 입력창 포커스 시 화면 확대 방지 */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.35s ease-out both;
+}
+
+.animate-toast {
+  animation: toastIn 0.25s ease-out both;
+}
+
+.animate-sheet {
+  animation: sheetUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-toast,
+  .animate-sheet,
+  .animate-fade-in {
+    animation: none;
+  }
+}
+
+/* 손님 화면: 빠진 항목 안내 */
+[data-error="true"] input,
+[data-error="true"] select,
+[data-error="true"] textarea {
+  border-color: #fb7185 !important;
+  animation: fieldPulse 1.2s ease-out;
+}
+
+@keyframes fieldPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(244, 63, 94, 0);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.error-flash {
+  animation: errShake 0.5s ease both;
+}
+
+@keyframes errShake {
+  0% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(-5px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}

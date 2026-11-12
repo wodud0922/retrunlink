@@ -100,7 +100,7 @@ export function LandingPage() {
   useVisit("landing", () => supabase.rpc("bump_site", { p_kind: "landing" }));
   return (
     <Page toast={toast}>
-      <Landing onStart={() => router.push("/start")} />
+      <Landing onStart={() => router.push("/start")} onDemo={() => router.push("/demo")} />
     </Page>
   );
 }

@@ -4510,8 +4510,8 @@ export function Landing({ onStart, onDemo }) {
       a: "접수 때 동의를 받고, 처리가 끝난 건은 90일 뒤 자동으로 지워져요. 다른 사장님은 내 접수를 볼 수 없어요.",
     },
     {
-      q: "나중에 유료가 되나요?",
-      a: "나중에 유료 요금제가 생길 수 있어요. 바뀌기 30일 전에 미리 알려 드리고, 카드를 등록하지 않았으니 동의 없이 결제되는 일은 없어요.",
+      q: "정말 무료인가요?",
+      a: "네, 모든 기능을 무료로 써요. 카드 등록도 없고, 접수 개수 제한도 없어요.",
     },
     {
       q: "그만 쓰고 싶으면요?",
@@ -4618,21 +4618,21 @@ export function Landing({ onStart, onDemo }) {
           <h2 className="text-center text-[24px] font-bold tracking-tight text-neutral-900">요금</h2>
           <div className="relative mx-auto mt-8 max-w-md rounded-2xl border-2 border-neutral-900 bg-white p-6">
             <span className="absolute -top-3 left-6 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white">
-              지금 무료
+              무료
             </span>
             <p className="text-[15px] font-bold text-neutral-900">리턴링크</p>
             <p className="mt-2 text-[30px] font-bold tracking-tight text-neutral-900">
               0<span className="text-[16px] font-semibold">원</span>
             </p>
             <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
-              지금 가입하면 모든 기능을 무료로 써요.
+              모든 기능을 무료로 써요.
             </p>
             <ul className="mt-4 space-y-2 text-[13.5px] text-neutral-700">
               {[
                 "접수 무제한 · 모든 기능 그대로",
-                "카드 등록 없음 · 자동 결제 없음",
-                "유료로 바뀌기 30일 전에 미리 알려 드려요",
-                "원하지 않으면 그때 언제든 탈퇴할 수 있어요",
+                "카드 등록 없음",
+                "가입은 카카오로 3초",
+                "언제든 탈퇴할 수 있어요",
               ].map((t) => (
                 <li key={t} className="flex gap-2">
                   <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" /> {t}
@@ -5163,7 +5163,7 @@ function TrialBanner({ trialEndsAt }) {
           </>
         ) : (
           <>
-            <span className="font-semibold">무료 기간이 끝났어요.</span> 결제 기능을 준비하는 동안은 계속 무료로 쓸 수 있어요.
+            <span className="font-semibold">계속 무료로 쓸 수 있어요.</span>
           </>
         )}
       </p>
@@ -5341,7 +5341,7 @@ export function useToast() {
   return [toast, showToast];
 }
 
-export default function ReturnLinkApp({ initialView = "landing" }) {
+export default function ReturnLinkApp({ initialView = "landing", demo = false }) {
   const [view, setView] = useState(initialView);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [requests, setRequests] = useState(() => purgeOld(INITIAL_REQUESTS));
@@ -5409,7 +5409,16 @@ export default function ReturnLinkApp({ initialView = "landing" }) {
   }, []);
 
   const switchView = (next) => {
+    if (demo && (next === "landing" || next === "start")) {
+      // 데모에서는 소개·가입으로 가면 진짜 페이지로 이동해요.
+      window.location.href = next === "start" ? "/start" : "/";
+      return;
+    }
     setView(next);
+    if (demo) {
+      window.scrollTo({ top: 0 });
+      return;
+    }
     try {
       window.history.replaceState(null, "", PATHS[next] || "/");
     } catch (e) {
@@ -5459,10 +5468,31 @@ export default function ReturnLinkApp({ initialView = "landing" }) {
 
   return (
     <div className="min-h-screen bg-[#F5F4F1]">
+      {demo ? (
+        <div className="bg-neutral-900 px-4 py-2.5 text-white">
+          <div className="mx-auto flex max-w-md items-center gap-2">
+            <p className="min-w-0 flex-1 text-[12.5px] leading-snug">
+              <span className="font-bold text-emerald-300">데모</span> · 손님으로 접수해 보고 사장님 화면에서 확인해 보세요.
+              이 기기에만 저장돼요.
+            </p>
+            <a
+              href="/start"
+              className="shrink-0 rounded-lg bg-[#FEE500] px-3 py-1.5 text-[12px] font-bold text-neutral-900"
+            >
+              무료로 시작
+            </a>
+          </div>
+        </div>
+      ) : null}
       <nav className="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur">
         <div className="mx-auto grid max-w-md grid-cols-3 gap-1 rounded-xl bg-neutral-100 p-1">
           {[
-            { id: "landing", label: "소개·가입", icon: <House size={15} />, on: view === "landing" || view === "start" },
+            {
+              id: "landing",
+              label: demo ? "소개" : "소개·가입",
+              icon: <House size={15} />,
+              on: view === "landing" || view === "start",
+            },
             { id: "customer", label: "손님 화면", icon: <Store size={15} />, on: view === "customer" },
             { id: "admin", label: "사장님", icon: <Settings size={15} />, on: view === "admin" },
           ].map((t) => (
@@ -5500,7 +5530,7 @@ export default function ReturnLinkApp({ initialView = "landing" }) {
             showToast={showToast}
             goAdmin={() => {
               switchView("admin");
-              showToast("사장님 화면 데모로 이동했어요");
+              showToast("사장님 화면으로 이동했어요");
             }}
           />
         ) : (

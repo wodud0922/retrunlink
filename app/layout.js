@@ -2,7 +2,7 @@ import "./globals.css";
 
 const SITE = "https://returnlinks.com";
 const TITLE = "ReturnLink | 1인 마켓 교환·반품 포털";
-const DESC = "인스타그램 1인 마켓의 카톡 CS를 줄여주는 교환·반품 접수 포털, 리턴링크. 링크 하나로 접수하고 지금은 무료예요.";
+const DESC = "인스타그램 1인 마켓의 카톡 CS를 줄여주는 교환·반품 접수 포털, 리턴링크. 링크 하나로 접수하고 무료로 써요.";
 
 export const metadata = {
   metadataBase: new URL(SITE),

@@ -374,6 +374,7 @@ export function AdminPage() {
         onDelete={onDelete}
         onSaveSettings={onSaveSettings}
         onReset={onLogout}
+        onLogout={onLogout}
         resetLabel="로그아웃"
         onWithdraw={onWithdraw}
         showToast={showToast}

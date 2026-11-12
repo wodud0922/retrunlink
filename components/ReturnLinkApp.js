@@ -25,6 +25,7 @@ import {
   Inbox,
   Lightbulb,
   Link as LinkIcon,
+  LogOut,
   MapPin,
   MessageCircle,
   Package,
@@ -2422,29 +2423,23 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
 
 function StatCard({ icon, tone, label, value, unit, pill, pillTone }) {
   return (
-    <div className={panelClass + " flex items-center gap-4 p-5"}>
+    <div className={panelClass + " p-4 sm:p-5"}>
+      <div className="flex items-center gap-2.5">
+        <span className={"flex h-10 w-10 shrink-0 items-center justify-center rounded-full " + tone}>{icon}</span>
+        <p className="min-w-0 text-[13px] leading-snug text-neutral-600">{label}</p>
+      </div>
+      <p className="mt-3 whitespace-nowrap text-[28px] font-bold leading-tight tracking-tight text-neutral-900">
+        {value}
+        <span className="ml-1 text-[17px] font-semibold">{unit}</span>
+      </p>
       <span
         className={
-          "flex h-12 w-12 shrink-0 items-center justify-center rounded-full xl:h-16 xl:w-16 " + tone
+          "mt-2 inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-full px-2.5 py-1 text-[12px] font-medium leading-snug " +
+          pillTone
         }
       >
-        {icon}
+        {pill}
       </span>
-      <div className="min-w-0">
-        <p className="whitespace-nowrap text-[13px] text-neutral-600">{label}</p>
-        <p className="mt-0.5 whitespace-nowrap text-[26px] font-bold leading-tight tracking-tight text-neutral-900 xl:text-[30px]">
-          {value}
-          <span className="ml-1 text-[17px] font-semibold">{unit}</span>
-        </p>
-        <span
-          className={
-            "mt-1 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-medium " +
-            pillTone
-          }
-        >
-          {pill}
-        </span>
-      </div>
     </div>
   );
 }
@@ -2792,7 +2787,8 @@ const STAGES = [
   { id: "done", label: "완료", badge: "bg-emerald-50 text-emerald-700", empty: "끝난 건이 없어요" },
 ];
 
-function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, showToast }) {
+function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, showToast, openSettings }) {
+  const [guide, setGuide] = useState(false);
   const [tab, setTab] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("new");
@@ -2923,10 +2919,11 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
   };
 
   return (
-    <div className="mx-auto space-y-4">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="min-w-0 space-y-4">
         <div className="grid gap-4 md:grid-cols-3">
           <StatCard
-            icon={<MessageCircle className="h-6 w-6 text-violet-500 xl:h-7 xl:w-7" />}
+            icon={<MessageCircle className="h-5 w-5 text-violet-500" />}
             tone="bg-violet-100"
             label="이번 주 방어한 카톡"
             value={weekly.cur.total}
@@ -2944,7 +2941,7 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
             pillTone="bg-violet-50 text-violet-700"
           />
           <StatCard
-            icon={<Clock className="h-6 w-6 text-emerald-700 xl:h-7 xl:w-7" />}
+            icon={<Clock className="h-5 w-5 text-emerald-700" />}
             tone="bg-emerald-100"
             label="아낀 CS 시간 (추정)"
             value={(weekly.cur.minutes / 60).toFixed(1)}
@@ -2958,20 +2955,19 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
             pillTone="bg-emerald-50 text-emerald-700"
           />
           <StatCard
-            icon={<Box className="h-6 w-6 text-orange-500 xl:h-7 xl:w-7" />}
+            icon={<Box className="h-5 w-5 text-orange-500" />}
             tone="bg-orange-100"
             label="지금 할 일"
             value={counts.waiting + counts.progress + counts.arrived}
             unit="건"
             pill={
-              <span className="flex items-center gap-1.5">
+              <span className="flex flex-wrap items-center gap-x-2.5">
                 {[
                   { id: "waiting", label: "입금", n: counts.waiting },
                   { id: "progress", label: "수거", n: counts.progress },
                   { id: "arrived", label: "발송", n: counts.arrived },
                 ].map((x, i) => (
-                  <span key={x.id} className="flex items-center gap-1.5">
-                    {i > 0 ? <span className="opacity-40">·</span> : null}
+                  <span key={x.id} className="flex items-center">
                     <button
                       type="button"
                       onClick={() => jump(x.id)}
@@ -3253,6 +3249,86 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
           </p>
         </Modal>
       ) : null}
+      </div>
+
+      <aside className={panelClass + " h-fit space-y-4 p-5"}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-[17px] font-bold text-neutral-900">빠른 설정</h2>
+          <button
+            type="button"
+            onClick={() => openSettings && openSettings("profile")}
+            aria-label="설정 열기"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+          <QuickCard
+            icon={<Palette size={20} className="text-rose-500" />}
+            tone="bg-rose-50"
+            title="손님 화면 꾸미기"
+            action="꾸미기"
+            onAction={() => openSettings && openSettings("profile")}
+          >
+            <p>프로필 사진, 소개 문구, 글꼴({fontOf(settings.font).name})을 바꿀 수 있어요.</p>
+          </QuickCard>
+          <QuickCard
+            icon={<Shirt size={20} className="text-emerald-700" />}
+            tone="bg-emerald-50"
+            title="상품·사유 관리"
+            action="관리하기"
+            onAction={() => openSettings && openSettings("products")}
+          >
+            <p>
+              {settings.productMode === "list"
+                ? "등록 상품 " + settings.products.length + "개에서 손님이 골라요."
+                : "손님이 상품명을 직접 입력해요."}
+            </p>
+            <p>교환·반품 사유 {settings.reasons.length}개</p>
+          </QuickCard>
+          <QuickCard
+            icon={<CreditCard size={20} className="text-blue-600" />}
+            tone="bg-blue-50"
+            title="계좌·배송비"
+            action="수정"
+            onAction={() => openSettings && openSettings("pay")}
+          >
+            <p>
+              {settings.bank ? settings.bank + " " : ""}
+              {settings.accountNumber}
+            </p>
+            <p>예금주: {settings.accountHolder}</p>
+          </QuickCard>
+          <QuickCard
+            icon={<MessageCircle size={20} className="text-violet-600" />}
+            tone="bg-violet-50"
+            title="FAQ 빠른 수정"
+            action="관리하기"
+            onAction={() => openSettings && openSettings("faq")}
+          >
+            <p>자주 묻는 질문 {settings.faqs.length}개를 손님 화면에 보여 주고 있어요.</p>
+          </QuickCard>
+          <QuickCard
+            icon={<Lightbulb size={20} className="text-amber-500" />}
+            tone="bg-amber-50"
+            title="도움말"
+            action={guide ? "가이드 접기" : "가이드 보기"}
+            onAction={() => setGuide(!guide)}
+          >
+            <p>처리 순서와 팁을 확인해 보세요.</p>
+            {guide ? (
+              <ol className="mt-2 list-decimal space-y-1 pl-4 text-neutral-600">
+                <li>내 링크를 복사해 인스타 프로필에 붙여요.</li>
+                <li>입금이 들어오면 입금 확인을 눌러요. 수거 단계로 넘어가요.</li>
+                <li>택배사에 회수를 접수하고, 상품이 도착하면 수거 완료를 눌러요.</li>
+                <li>교환품을 보내거나 환불한 뒤 버튼을 누르면 완료 탭으로 가요.</li>
+                <li>잘못 눌렀다면 되돌리기로 한 단계 돌아가요.</li>
+              </ol>
+            ) : null}
+          </QuickCard>
+        </div>
+      </aside>
     </div>
   );
 }
@@ -4463,6 +4539,157 @@ function KakaoButton({ onClick, children, className = "" }) {
   );
 }
 
+const SHOWCASE = [
+  {
+    src: "/showcase/1.webp",
+    title: "방어한 카톡과 아낀 시간이 한눈에",
+    desc: "사장님 화면에서 이번 주 숫자가 바로 보여요",
+    alt: "사장님 화면의 이번 주 방어한 카톡, 아낀 시간, 지금 할 일 숫자 카드",
+  },
+  {
+    src: "/showcase/2.webp",
+    title: "입금·수거·발송, 체크만 하세요",
+    desc: "단계별 탭과 버튼 하나로 다음 단계로 넘겨요",
+    alt: "접수 목록과 입금확인대기, 수거진행, 발송 탭",
+  },
+  {
+    src: "/showcase/3.webp",
+    title: "손님은 내 링크로 들어와서 접수해요",
+    desc: "가입이나 앱 설치 없이 바로 시작해요",
+    alt: "손님이 보는 마켓 접수 화면",
+  },
+  {
+    src: "/showcase/4.webp",
+    title: "상품과 옵션은 눌러서 고르기만",
+    desc: "다시 물어볼 필요 없이 정확하게 들어와요",
+    alt: "손님이 상품과 옵션을 골라 교환을 접수하는 화면",
+  },
+  {
+    src: "/showcase/5.webp",
+    title: "빠른 설정으로 내 마켓을 바로 손봐요",
+    desc: "꾸미기, 상품, 계좌, FAQ를 한곳에서 고쳐요",
+    alt: "사장님 화면의 빠른 설정 카드",
+  },
+];
+
+function Showcase() {
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return undefined;
+    try {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
+    } catch (e) {
+      /* 무시 */
+    }
+    const t = setInterval(() => setI((v) => (v + 1) % SHOWCASE.length), 3800);
+    return () => clearInterval(t);
+  }, [paused]);
+
+  return (
+    <div
+      className="mx-auto w-full max-w-[540px]"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={() => setPaused(true)}
+      onTouchEnd={() => setPaused(false)}
+    >
+      <div className="relative aspect-[1600/1060] overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-card">
+        {SHOWCASE.map((x, n) => (
+          <img
+            key={x.src}
+            src={x.src}
+            alt={n === i ? x.alt : ""}
+            aria-hidden={n !== i}
+            loading={n === 0 ? "eager" : "lazy"}
+            draggable={false}
+            className={
+              "absolute inset-0 h-full w-full object-cover transition-opacity duration-700 " +
+              (n === i ? "opacity-100" : "opacity-0")
+            }
+          />
+        ))}
+      </div>
+      <div className="mt-4 min-h-[56px] text-center" aria-live="polite">
+        <p className="text-[16px] font-bold tracking-tight text-neutral-900">{SHOWCASE[i].title}</p>
+        <p className="mt-0.5 text-[13px] text-neutral-500">{SHOWCASE[i].desc}</p>
+      </div>
+      <div className="flex items-center justify-center gap-1">
+        {SHOWCASE.map((x, n) => (
+          <button
+            key={x.src}
+            type="button"
+            onClick={() => setI(n)}
+            aria-label={n + 1 + "번째 사진 보기"}
+            aria-current={n === i}
+            className="flex h-8 w-6 items-center justify-center"
+          >
+            <span
+              className={
+                "block h-1.5 rounded-full transition-all " + (n === i ? "w-5 bg-neutral-900" : "w-1.5 bg-neutral-300")
+              }
+            />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LandingStats() {
+  return (
+    <section className="mx-auto max-w-5xl px-5 pb-14">
+      <div className="text-center">
+        <p className="text-[13px] font-bold text-emerald-700">사장님 화면 미리보기</p>
+        <h2 className="mt-1 text-[24px] font-bold tracking-tight text-neutral-900">
+          방어한 카톡과 아낀 시간이 숫자로 쌓여요
+        </h2>
+      </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <StatCard
+          icon={<MessageCircle className="h-5 w-5 text-violet-500" />}
+          tone="bg-violet-100"
+          label="이번 주 방어한 카톡"
+          value={312}
+          unit="건"
+          pill={
+            <>
+              지난 주 대비 +22% <ArrowUp size={12} />
+            </>
+          }
+          pillTone="bg-violet-50 text-violet-700"
+        />
+        <StatCard
+          icon={<Clock className="h-5 w-5 text-emerald-700" />}
+          tone="bg-emerald-100"
+          label="아낀 CS 시간 (추정)"
+          value="18.4"
+          unit="시간"
+          pill={
+            <>
+              지난 주 대비 +3.5시간 <ArrowUp size={12} />
+            </>
+          }
+          pillTone="bg-emerald-50 text-emerald-700"
+        />
+        <StatCard
+          icon={<Box className="h-5 w-5 text-orange-500" />}
+          tone="bg-orange-100"
+          label="지금 할 일"
+          value={76}
+          unit="건"
+          pill="입금 21 · 수거 34 · 발송 21"
+          pillTone="bg-orange-50 text-orange-700"
+        />
+      </div>
+      <p className="mt-3 text-center text-[12px] text-neutral-400">
+        예시 화면이에요. 가입하면 내 접수와 조회가 이렇게 숫자로 쌓여요.
+      </p>
+    </section>
+  );
+}
+
 function HeroMock() {
   const sample = { type: "exchange", amount: 6000, paid: true, pickup: "progress", decision: null };
   return (
@@ -4541,16 +4768,19 @@ export function Landing({ onStart, onDemo }) {
               <button
                 type="button"
                 onClick={onDemo}
-                className="rounded-xl border border-neutral-300 bg-white px-6 py-4 text-[15px] font-semibold text-neutral-800 transition active:scale-[0.98]"
+                className="flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-600 bg-emerald-600 px-6 py-4 text-[16px] font-bold text-white shadow-card transition hover:bg-emerald-700 active:scale-[0.98]"
               >
-                데모 먼저 둘러보기
+                <Eye size={18} />
+                구경할래요!
               </button>
             ) : null}
           </div>
           <p className="mt-3 text-[12.5px] text-neutral-500">무료 · 접수 무제한 · 카드 등록 없음</p>
         </div>
-        <HeroMock />
+        <Showcase />
       </section>
+
+      <LandingStats />
 
       <section className="bg-white py-14">
         <div className="mx-auto max-w-5xl px-5">
@@ -4621,9 +4851,7 @@ export function Landing({ onStart, onDemo }) {
               무료
             </span>
             <p className="text-[15px] font-bold text-neutral-900">리턴링크</p>
-            <p className="mt-2 text-[30px] font-bold tracking-tight text-neutral-900">
-              0<span className="text-[16px] font-semibold">원</span>
-            </p>
+            <p className="mt-2 text-[34px] font-extrabold tracking-wide text-blue-600">FREE</p>
             <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
               모든 기능을 무료로 써요.
             </p>
@@ -5183,6 +5411,7 @@ export function AdminView({
   onDelete,
   onSaveSettings,
   onReset,
+  onLogout,
   resetLabel = "데모 되돌리기",
   onWithdraw,
   trialEndsAt,
@@ -5248,6 +5477,15 @@ export function AdminView({
             </span>
             <span className="text-[13px] font-medium">설정</span>
           </button>
+          {onLogout ? (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[13px] font-medium text-neutral-700 transition active:scale-95"
+            >
+              <LogOut size={15} /> 로그아웃
+            </button>
+          ) : null}
         </div>
       </header>
 

@@ -61,8 +61,23 @@ const STORAGE_KEY = "returnlink-simple-v2";
 
 // 실제 카카오톡 채널 주소로 바꿔 주세요 (예: https://pf.kakao.com/_xxxxxx/chat)
 // 사장님이 설정에 넣은 카카오톡 채널·오픈채팅 주소만 허용해요.
+function normalizeKakaoUrl(u) {
+  const t = (u || "").trim();
+  if (!t) return "";
+  return /^https?:\/\//i.test(t) ? t : "https://" + t;
+}
 function validKakaoUrl(u) {
-  return /^https?:\/\/(pf\.kakao\.com|open\.kakao\.com)\/\S+$/.test((u || "").trim());
+  return /^https?:\/\/(pf\.kakao\.com|open\.kakao\.com)\/\S+$/i.test(normalizeKakaoUrl(u));
+}
+
+// 손님에게 보이는 리턴링크 글자 (로고 색)
+function RLWord({ className = "" }) {
+  return (
+    <span className={"font-extrabold " + className}>
+      <span style={{ color: "#0E1B42" }}>Return</span>
+      <span style={{ color: "#12C48B" }}>Link</span>
+    </span>
+  );
 }
 
 const SAMPLE_TRACKING = "681234567895";
@@ -458,11 +473,14 @@ function accountText(s) {
   return s.bank + " " + s.accountNumber + " (예금주 " + s.accountHolder + ")";
 }
 
-function shopLink(s) {
+function linkHost() {
   const real = typeof window !== "undefined" ? window.location.host : "";
   // 미리보기(아티팩트·로컬)에서는 실제 서비스 주소 모양으로 보여 줘요.
-  const host = real && !/claudeusercontent|localhost|^$/.test(real) ? real : "returnlink.kr";
-  return host + "/@" + s.handle;
+  return real && !/claudeusercontent|localhost|^$/.test(real) ? real : "returnlink.kr";
+}
+
+function shopLink(s) {
+  return linkHost() + "/@" + s.handle;
 }
 
 function fontOf(id) {
@@ -2373,7 +2391,7 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
           여기서 해결이 안 됐다면 편하게 물어봐 주세요
         </p>
         <a
-          href={settings.kakaoUrl.trim()}
+          href={normalizeKakaoUrl(settings.kakaoUrl)}
           target="_blank"
           rel="noopener noreferrer"
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] py-4 text-[15px] font-bold text-[#191919] shadow-card transition active:scale-[0.98]"
@@ -2388,11 +2406,10 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
         <button
           type="button"
           onClick={goAdmin || (() => (window.location.href = "/"))}
-          className="inline-flex items-center gap-1 text-[12px] text-neutral-400 underline-offset-2 hover:underline"
+          className="inline-flex flex-wrap items-center justify-center gap-1 text-[13px] font-semibold text-neutral-700 underline-offset-2 hover:underline"
         >
-          Powered by <span className="font-bold text-neutral-700">ReturnLink</span> - 나도 1분 만에
-          반품 포털 만들기
-          <ArrowRight size={12} />
+          Powered by <RLWord /> · 나도 1분 만에 반품 포털 만들기
+          <ArrowRight size={13} />
         </button>
       </footer>
     </div>
@@ -3794,7 +3811,7 @@ function SettingsModal({ settings, initialTab, onClose, onSave, onReset, resetLa
     onSave({
       ...d,
       marketName: d.marketName.trim(),
-      kakaoUrl: (d.kakaoUrl || "").trim(),
+      kakaoUrl: normalizeKakaoUrl(d.kakaoUrl),
       intro: d.intro.trim(),
       accountNumber: d.accountNumber.trim(),
       accountHolder: d.accountHolder.trim(),
@@ -3981,7 +3998,7 @@ function SettingsModal({ settings, initialTab, onClose, onSave, onReset, resetLa
 
           <Box2 title="샵 URL 설정" hint="고객에게 보여질 마켓 고유 링크입니다.">
             <div className={cellRow}>
-              <span className={cellLabel + " w-auto"}>returnlink.kr/@</span>
+              <span className={cellLabel + " w-auto"}>{linkHost()}/@</span>
               <input
                 value={d.handle}
                 onChange={(e) => set("handle", e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ""))}
@@ -4667,7 +4684,7 @@ export function Landing({ onStart, onDemo }) {
       </section>
 
       <footer className="border-t border-neutral-200 py-8 text-center text-[12px] text-neutral-400">
-        <p className="font-bold text-neutral-600">ReturnLink</p>
+        <p className="text-[14px]"><RLWord /></p>
         <p className="mt-2 flex justify-center gap-3">
           <span>이용약관</span>
           <span>개인정보 처리방침</span>
@@ -4716,6 +4733,7 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
   const [d, setD] = useState({
     marketName: "",
     handle: "",
+    kakaoUrl: "",
     feeOnCustomer: true,
     shippingFee: "6000",
     bank: BANKS[0],
@@ -4773,7 +4791,7 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
     const next = {
       ...DEFAULT_SETTINGS,
       marketName: d.marketName.trim(),
-      kakaoUrl: "",
+      kakaoUrl: normalizeKakaoUrl(d.kakaoUrl),
       intro: "",
       logo: "",
       handle: d.handle,
@@ -4863,6 +4881,8 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
             }
             if (!free) next.handle = "이미 쓰고 있는 주소예요. 다른 주소를 적어 주세요.";
           }
+          if (d.kakaoUrl.trim() && !validKakaoUrl(d.kakaoUrl))
+            next.kakaoUrl = "pf.kakao.com 또는 open.kakao.com 주소만 넣을 수 있어요.";
           if (!fail(next)) go(2);
         }}
       >
@@ -4881,7 +4901,7 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
         >
           <div className="flex overflow-hidden rounded-xl border border-neutral-200 bg-white focus-within:border-neutral-900">
             <span className="flex items-center whitespace-nowrap bg-neutral-50 px-3 text-[13px] text-neutral-500">
-              returnlink.kr/@
+              {linkHost()}/@
             </span>
             <input
               value={d.handle}
@@ -4890,6 +4910,22 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
               className="min-w-0 flex-1 px-3 py-3 outline-none"
             />
           </div>
+        </Field>
+        <Field
+          label="카카오톡 상담 주소 (선택)"
+          error={errors.kakaoUrl}
+          hint={
+            d.kakaoUrl.trim() && validKakaoUrl(d.kakaoUrl)
+              ? "손님 화면 맨 아래에 노란 1:1 상담 버튼이 생겨요"
+              : "카카오톡 채널 채팅 주소나 오픈채팅 주소예요. 나중에 설정에서 넣어도 돼요."
+          }
+        >
+          <input
+            value={d.kakaoUrl}
+            onChange={(e) => set({ kakaoUrl: e.target.value })}
+            placeholder="https://pf.kakao.com/_xxxx/chat"
+            className={inputClass}
+          />
         </Field>
       </StepShell>
     );
@@ -5217,6 +5253,19 @@ export function AdminView({
 
       <div className="mx-auto max-w-5xl px-4 pb-12 pt-5 lg:px-6">
         <TrialBanner trialEndsAt={trialEndsAt} />
+        {!validKakaoUrl(settings.kakaoUrl) ? (
+          <button
+            type="button"
+            onClick={() => setSettingsTab("profile")}
+            className="mb-4 flex w-full items-center gap-3 rounded-xl border border-[#F5D800] bg-[#FFFBD6] px-4 py-3 text-left"
+          >
+            <MessageCircle size={18} className="shrink-0 text-[#191919]" />
+            <span className="min-w-0 flex-1 text-[14px] text-neutral-800">
+              <b>카카오톡 상담 주소</b>를 넣으면 손님 화면 맨 아래에 1:1 상담 버튼이 생겨요
+            </span>
+            <span className="shrink-0 text-[13px] font-bold text-neutral-900">넣기 →</span>
+          </button>
+        ) : null}
         <Dashboard
           settings={settings}
           requests={requests}

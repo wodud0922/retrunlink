@@ -2919,7 +2919,7 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
   };
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-4">
         <div className="grid gap-4 md:grid-cols-3">
           <StatCard
@@ -3251,7 +3251,7 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
       ) : null}
       </div>
 
-      <aside className={panelClass + " h-fit space-y-4 p-5"}>
+      <aside className={panelClass + " h-fit space-y-4 p-5 lg:sticky lg:top-20"}>
         <div className="flex items-center justify-between">
           <h2 className="text-[17px] font-bold text-neutral-900">빠른 설정</h2>
           <button
@@ -3263,7 +3263,7 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
             <Settings size={18} />
           </button>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1">
           <QuickCard
             icon={<Palette size={20} className="text-rose-500" />}
             tone="bg-rose-50"
@@ -4589,7 +4589,7 @@ function Showcase() {
 
   return (
     <div
-      className="mx-auto w-full max-w-[540px]"
+      className="mx-auto w-full max-w-[560px]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onTouchStart={() => setPaused(true)}
@@ -4611,11 +4611,8 @@ function Showcase() {
           />
         ))}
       </div>
-      <div className="mt-4 min-h-[56px] text-center" aria-live="polite">
-        <p className="text-[16px] font-bold tracking-tight text-neutral-900">{SHOWCASE[i].title}</p>
-        <p className="mt-0.5 text-[13px] text-neutral-500">{SHOWCASE[i].desc}</p>
-      </div>
-      <div className="flex items-center justify-center gap-1">
+
+      <div className="mt-2 flex items-center justify-center gap-1">
         {SHOWCASE.map((x, n) => (
           <button
             key={x.src}
@@ -5436,7 +5433,7 @@ export function AdminView({
   return (
     <div>
       <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 lg:px-6">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 lg:px-8">
           <p className="flex items-baseline gap-2">
             <span
               className="whitespace-nowrap text-[26px] leading-none tracking-tight text-neutral-900 lg:text-[30px]"
@@ -5489,7 +5486,7 @@ export function AdminView({
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl px-4 pb-12 pt-5 lg:px-6">
+      <div className="mx-auto max-w-[1600px] px-4 pb-12 pt-5 lg:px-8">
         <TrialBanner trialEndsAt={trialEndsAt} />
         {!validKakaoUrl(settings.kakaoUrl) ? (
           <button

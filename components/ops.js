@@ -6,8 +6,10 @@ import {
   ArrowUpRight,
   CalendarClock,
   Eye,
+  Check,
   Inbox,
   LogOut,
+  MessageSquare,
   RefreshCw,
   Search,
   Store,
@@ -359,11 +361,84 @@ function ShopRow({ s, live, onSavePlan }) {
   );
 }
 
+/* ---------------- 사장님 피드백 ---------------- */
+
+function FeedbackPanel({ items, onDone }) {
+  const [show, setShow] = useState("open");
+  const open = items.filter((f) => !f.done);
+  const list = show === "open" ? open : items;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">
+        <p className="flex items-center gap-1.5 text-[15px] font-bold text-neutral-900">
+          <MessageSquare size={15} /> 사장님 피드백
+          {open.length ? (
+            <span className="rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-bold text-white">{open.length}</span>
+          ) : null}
+        </p>
+        <span className="flex-1" />
+        <div className="flex rounded-lg bg-neutral-100 p-0.5 text-[12.5px]">
+          {[
+            { id: "open", label: "안 읽은 것 " + open.length },
+            { id: "all", label: "전체 " + items.length },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setShow(t.id)}
+              aria-pressed={show === t.id}
+              className={
+                "rounded-md px-2.5 py-1.5 " + (show === t.id ? "bg-white font-bold text-neutral-900" : "text-neutral-500")
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {list.length ? (
+        <ul className="divide-y divide-neutral-100">
+          {list.map((f) => (
+            <li key={f.id} className={"flex gap-3 px-4 py-3.5 " + (f.done ? "opacity-60" : "")}>
+              <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] text-neutral-500">
+                  <span className="font-semibold text-neutral-800">{f.market || "마켓 없음"}</span>
+                  {f.handle ? " · @" + f.handle : ""} · {ago(f.created_at)}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-neutral-900">
+                  {f.message}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onDone(f.id, !f.done)}
+                className={
+                  "flex h-9 shrink-0 items-center gap-1 self-start rounded-lg border px-3 text-[12.5px] font-semibold " +
+                  (f.done
+                    ? "border-neutral-200 text-neutral-500"
+                    : "border-emerald-600 bg-emerald-600 text-white")
+                }
+              >
+                {f.done ? "다시 안 읽음" : <><Check size={14} /> 확인함</>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-4 py-8 text-center text-[13.5px] text-neutral-400">
+          {items.length ? "안 읽은 피드백이 없어요" : "아직 들어온 피드백이 없어요"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- 운영실 화면 ---------------- */
 
 export function OpsPage() {
   const [auth, setAuth] = useState({ loading: true, user: null });
   const [data, setData] = useState(null);
+  const [feedback, setFeedback] = useState([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -393,6 +468,8 @@ export function OpsPage() {
     setErr("");
     setData(d);
     setUpdatedAt(new Date());
+    const fb = await supabase.rpc("ops_feedback");
+    if (!fb.error) setFeedback(fb.data || []);
   }, []);
 
   useEffect(() => {
@@ -414,6 +491,12 @@ export function OpsPage() {
     },
     [load]
   );
+
+  const onFeedbackDone = useCallback(async (id, done) => {
+    setFeedback((list) => list.map((f) => (f.id === id ? { ...f, done } : f)));
+    const { error } = await supabase.rpc("ops_feedback_done", { p_id: id, p_done: done });
+    if (error) setFeedback((list) => list.map((f) => (f.id === id ? { ...f, done: !done } : f)));
+  }, []);
 
   const liveByShop = useMemo(() => {
     const m = {};
@@ -574,6 +657,8 @@ export function OpsPage() {
         </div>
 
         <VisitChart site={site} />
+
+        <FeedbackPanel items={feedback} onDone={onFeedbackDone} />
 
         <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
           <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-4 py-3">

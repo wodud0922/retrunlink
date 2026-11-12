@@ -356,6 +356,11 @@ export function AdminPage() {
     return true;
   }, [routerRef, showToast]);
 
+  const onFeedback = useCallback(async (message) => {
+    const { error } = await supabase.rpc("submit_feedback", { p_message: message });
+    return !error;
+  }, []);
+
   const onLogout = useCallback(async () => {
     await supabase.auth.signOut();
     routerRef.current.replace("/");
@@ -375,6 +380,7 @@ export function AdminPage() {
         onSaveSettings={onSaveSettings}
         onReset={onLogout}
         onLogout={onLogout}
+        onFeedback={onFeedback}
         resetLabel="로그아웃"
         onWithdraw={onWithdraw}
         showToast={showToast}

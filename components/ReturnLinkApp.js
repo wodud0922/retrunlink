@@ -2676,6 +2676,70 @@ function RequestRow({ r, leaving, onOpen, onRun }) {
   );
 }
 
+function FeedbackCard({ onFeedback, showToast }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const send = async () => {
+    const msg = text.trim();
+    if (!msg || busy) return;
+    if (!onFeedback) {
+      showToast("데모에서는 보내지지 않아요. 가입하면 바로 보낼 수 있어요");
+      return;
+    }
+    setBusy(true);
+    const ok = await onFeedback(msg);
+    setBusy(false);
+    if (ok) {
+      setText("");
+      setSent(true);
+      showToast("피드백을 보냈어요. 고마워요!");
+    } else {
+      showToast("보내지 못했어요. 잠시 후 다시 해 주세요", "warn");
+    }
+  };
+  return (
+    <div className="rounded-xl border border-neutral-200 p-4">
+      <div className="flex gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-50">
+          <Send size={19} className="text-sky-600" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[15px] font-bold text-neutral-900">운영자에게 피드백</h3>
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-neutral-500">
+            불편한 점, 필요한 기능을 남겨 주세요. 운영자가 직접 읽고 반영해요.
+          </p>
+        </div>
+      </div>
+      <label htmlFor="rl-feedback" className="sr-only">
+        피드백 내용
+      </label>
+      <textarea
+        id="rl-feedback"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value.slice(0, 2000));
+          setSent(false);
+        }}
+        rows={4}
+        placeholder="예) 접수 목록을 엑셀로 받고 싶어요"
+        className="mt-3 w-full resize-none rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-[14px] text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-neutral-900"
+      />
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span className="text-[12px] text-neutral-400">{sent ? "보냈어요. 고마워요!" : text.length + " / 2000"}</span>
+        <button
+          type="button"
+          onClick={send}
+          disabled={!text.trim() || busy}
+          className="whitespace-nowrap rounded-lg bg-neutral-900 px-4 py-2 text-[13px] font-semibold text-white transition active:scale-95 disabled:opacity-40"
+        >
+          {busy ? "보내는 중…" : "보내기"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function QuickCard({ icon, tone, title, children, action, onAction, external }) {
   return (
     <div className="rounded-xl border border-neutral-200 p-4">
@@ -2787,7 +2851,7 @@ const STAGES = [
   { id: "done", label: "완료", badge: "bg-emerald-50 text-emerald-700", empty: "끝난 건이 없어요" },
 ];
 
-function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, showToast, openSettings }) {
+function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, showToast, openSettings, onFeedback }) {
   const [guide, setGuide] = useState(false);
   const [tab, setTab] = useState("all");
   const [query, setQuery] = useState("");
@@ -3251,7 +3315,7 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
       ) : null}
       </div>
 
-      <aside className={panelClass + " h-fit space-y-4 p-5 lg:sticky lg:top-20"}>
+      <aside className={panelClass + " h-fit space-y-4 p-5"}>
         <div className="flex items-center justify-between">
           <h2 className="text-[17px] font-bold text-neutral-900">빠른 설정</h2>
           <button
@@ -3327,6 +3391,7 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
               </ol>
             ) : null}
           </QuickCard>
+          <FeedbackCard onFeedback={onFeedback} showToast={showToast} />
         </div>
       </aside>
     </div>
@@ -4720,6 +4785,7 @@ function HeroMock() {
 
 export function Landing({ onStart, onDemo }) {
   const [openFaq, setOpenFaq] = useState(-1);
+  const [whyOpen, setWhyOpen] = useState(false);
   const faqs = [
     {
       q: "손님도 가입해야 하나요?",
@@ -4734,8 +4800,8 @@ export function Landing({ onStart, onDemo }) {
       a: "접수 때 동의를 받고, 처리가 끝난 건은 90일 뒤 자동으로 지워져요. 다른 사장님은 내 접수를 볼 수 없어요.",
     },
     {
-      q: "정말 무료인가요?",
-      a: "네, 모든 기능을 무료로 써요. 카드 등록도 없고, 접수 개수 제한도 없어요.",
+      q: "왜 무료인가요?",
+      a: "더 나은 서비스를 위해 실제로 써 보신 사장님들의 피드백이 필요해요. 그래서 먼저 함께해 주시는 사장님 30분께는 평생 무료로 드려요. 카드 등록도 없고, 접수 개수 제한도 없어요.",
     },
     {
       q: "그만 쓰고 싶으면요?",
@@ -4869,8 +4935,47 @@ export function Landing({ onStart, onDemo }) {
               onClick={onStart}
               className="mt-6 w-full rounded-xl bg-neutral-900 py-3.5 text-[14px] font-semibold text-white"
             >
-              무료로 시작하기
+              지금 무료로 시작하기
             </button>
+            <p className="mt-2.5 text-center text-[12.5px] font-semibold text-red-600">
+              평생 무료 혜택이 얼마 남지 않았어요!
+            </p>
+          </div>
+
+          <div className="mx-auto mt-6 max-w-md overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50">
+            <button
+              type="button"
+              onClick={() => setWhyOpen(!whyOpen)}
+              aria-expanded={whyOpen}
+              className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left"
+            >
+              <span className="text-[16px] font-bold text-neutral-900">왜 무료인가요?</span>
+              <ChevronDown
+                size={18}
+                className={"shrink-0 text-emerald-700 transition " + (whyOpen ? "rotate-180" : "")}
+              />
+            </button>
+            {whyOpen ? (
+              <div className="animate-fade-up px-6 pb-6">
+                <p className="text-[14px] leading-relaxed text-neutral-700">
+                  리턴링크는 사장님들께 더 나은 서비스를 드리기 위해 실제로 써 보신 분들의 피드백이 필요해요.
+                </p>
+                <p className="mt-2 text-[14px] leading-relaxed text-neutral-700">
+                  그래서 먼저 함께해 주시는 <b className="text-emerald-700">사장님 30분께는 평생 무료</b>로 드려요. 써 보시고
+                  불편한 점이나 필요한 기능을 알려 주시면 바로 반영할게요.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3">
+                  <p className="text-[13.5px] font-bold text-neutral-900">선착순 30명 · 평생 무료</p>
+                  <button
+                    type="button"
+                    onClick={onStart}
+                    className="whitespace-nowrap rounded-lg bg-emerald-600 px-4 py-2.5 text-[13px] font-bold text-white transition active:scale-95"
+                  >
+                    지금 자리 잡기
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
@@ -5409,6 +5514,7 @@ export function AdminView({
   onSaveSettings,
   onReset,
   onLogout,
+  onFeedback,
   resetLabel = "데모 되돌리기",
   onWithdraw,
   trialEndsAt,
@@ -5510,6 +5616,7 @@ export function AdminView({
           onDelete={onDelete}
           showToast={showToast}
           openSettings={(t) => setSettingsTab(t)}
+          onFeedback={onFeedback}
         />
       </div>
 

@@ -4609,7 +4609,7 @@ const SHOWCASE = [
     src: "/showcase/1.webp",
     title: "방어한 카톡과 아낀 시간이 한눈에",
     desc: "사장님 화면에서 이번 주 숫자가 바로 보여요",
-    alt: "사장님 화면의 이번 주 방어한 카톡, 아낀 시간, 지금 할 일 숫자 카드",
+    alt: "이번 주 카톡 32건을 대신 막아 줬어요. 아낀 시간 4.1시간, 지금 할 일 12건",
   },
   {
     src: "/showcase/2.webp",
@@ -4713,11 +4713,11 @@ function LandingStats() {
           icon={<MessageCircle className="h-5 w-5 text-violet-500" />}
           tone="bg-violet-100"
           label="이번 주 방어한 카톡"
-          value={312}
+          value={32}
           unit="건"
           pill={
             <>
-              지난 주 대비 +22% <ArrowUp size={12} />
+              지난 주 대비 +19% <ArrowUp size={12} />
             </>
           }
           pillTone="bg-violet-50 text-violet-700"
@@ -4726,11 +4726,11 @@ function LandingStats() {
           icon={<Clock className="h-5 w-5 text-emerald-700" />}
           tone="bg-emerald-100"
           label="아낀 CS 시간 (추정)"
-          value="18.4"
+          value="4.1"
           unit="시간"
           pill={
             <>
-              지난 주 대비 +3.5시간 <ArrowUp size={12} />
+              지난 주 대비 +0.8시간 <ArrowUp size={12} />
             </>
           }
           pillTone="bg-emerald-50 text-emerald-700"
@@ -4739,9 +4739,9 @@ function LandingStats() {
           icon={<Box className="h-5 w-5 text-orange-500" />}
           tone="bg-orange-100"
           label="지금 할 일"
-          value={76}
+          value={12}
           unit="건"
-          pill="입금 21 · 수거 34 · 발송 21"
+          pill="입금 4 · 수거 5 · 발송 3"
           pillTone="bg-orange-50 text-orange-700"
         />
       </div>

@@ -116,9 +116,9 @@ const DEFAULT_SETTINGS = {
   productMode: "list",
   allowOther: true,
   products: [
-    { id: "p1", name: "Classic Wool Jacket", colors: "블랙, 차콜", sizes: "S, M, L", kind: "jacket", img: "" },
-    { id: "p2", name: "Linen Half Shirt", colors: "아이보리, 스카이블루", sizes: "S, M, L", kind: "shirt", img: "" },
-    { id: "p3", name: "Wide Denim Pants", colors: "연청, 중청", sizes: "S, M, L", kind: "pants", img: "" },
+    { id: "p1", name: "Classic Wool Jacket", colors: "블랙 / 차콜", sizes: "S / M / L", kind: "jacket", img: "" },
+    { id: "p2", name: "Linen Half Shirt", colors: "아이보리 / 스카이블루", sizes: "S / M / L", kind: "shirt", img: "" },
+    { id: "p3", name: "Wide Denim Pants", colors: "연청 / 중청", sizes: "S / M / L", kind: "pants", img: "" },
     { id: "p4", name: "Balloon Skirt", colors: "블랙, 베이지", sizes: "FREE", kind: "skirt", img: "" },
   ],
   reasons: [
@@ -3777,8 +3777,8 @@ function SettingsModal({ settings, initialTab, onClose, onSave, onReset, resetLa
       .map((p) => ({
         ...p,
         name: p.name.trim(),
-        colors: splitOptions(p.colors).join(", "),
-        sizes: splitOptions(p.sizes).join(", "),
+        colors: splitOptions(p.colors).join(" / "),
+        sizes: splitOptions(p.sizes).join(" / "),
       }))
       .filter((p) => p.name);
     if (d.productMode === "list" && products.length === 0)
@@ -4147,7 +4147,7 @@ function SettingsModal({ settings, initialTab, onClose, onSave, onReset, resetLa
           {d.productMode === "list" ? (
             <Box2
               title={"등록 상품 " + d.products.length + "개"}
-              hint="상품마다 색상 한 줄, 사이즈 한 줄만 적으면 돼요(쉼표나 / 로 구분). 비슷한 상품은 복제 버튼으로 옵션째 복사하세요."
+              hint="상품마다 색상 한 줄, 사이즈 한 줄만 적으면 돼요(/ 로 구분). 비슷한 상품은 복제 버튼으로 옵션째 복사하세요."
             >
               <input
                 ref={productImgRef}
@@ -4721,7 +4721,7 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
     bank: BANKS[0],
     accountNumber: "",
     accountHolder: "",
-    products: [{ id: "n1", name: "", colors: "", sizes: "S, M, L", kind: "default", img: "" }],
+    products: [{ id: "n1", name: "", colors: "", sizes: "S / M / L", kind: "default", img: "" }],
   });
   const [errors, setErrors] = useState({});
   const [flash, setFlash] = useState(0);
@@ -4766,8 +4766,8 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
           .map((p) => ({
             ...p,
             name: p.name.trim(),
-            colors: splitOptions(p.colors).join(", "),
-            sizes: splitOptions(p.sizes).join(", "),
+            colors: splitOptions(p.colors).join(" / "),
+            sizes: splitOptions(p.sizes).join(" / "),
           }))
           .filter((p) => p.name);
     const next = {
@@ -5010,14 +5010,14 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
               <input
                 value={p.colors}
                 onChange={(e) => setProduct(p.id, "colors", e.target.value)}
-                placeholder="색상: 블랙, 아이보리"
+                placeholder="색상: 블랙 / 아이보리"
                 aria-label="색상"
                 className={inputClass + " w-0 min-w-0 flex-1 py-2.5 text-[14px]"}
               />
               <input
                 value={p.sizes}
                 onChange={(e) => setProduct(p.id, "sizes", e.target.value)}
-                placeholder="사이즈: S, M, L"
+                placeholder="사이즈: S / M / L"
                 aria-label="사이즈"
                 className={inputClass + " w-0 min-w-0 flex-1 py-2.5 text-[14px]"}
               />
@@ -5029,7 +5029,7 @@ export function SignupFlow({ onFinish, onGo, showToast, onKakao, checkHandle, in
           onClick={() =>
             setD((prev) => ({
               ...prev,
-              products: [...prev.products, { id: "n" + Date.now(), name: "", colors: "", sizes: "S, M, L", kind: "default", img: "" }],
+              products: [...prev.products, { id: "n" + Date.now(), name: "", colors: "", sizes: "S / M / L", kind: "default", img: "" }],
             }))
           }
           className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-neutral-300 py-3 text-[13.5px] font-semibold text-neutral-700"

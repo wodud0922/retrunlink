@@ -460,7 +460,7 @@ export function AdminPage() {
         setShop({ ...s, settings: next });
         supabase.from("shops").update({ settings: next }).eq("id", s.id).then(() => {});
       }
-      return true;
+      return rows;
     },
     [showToast]
   );

@@ -2904,6 +2904,26 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
   const [edit, setEdit] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const fileRef = useRef(null);
+  // 되돌리기: 방금 한 일 하나를 기억해 뒀다가 원래대로 돌려놓아요.
+  const [undo, setUndo] = useState(null);
+  const ordersNow = useRef(orders);
+  ordersNow.current = orders;
+  const snapshot = (ids) => ordersNow.current.filter((o) => ids.includes(o.id)).map((o) => ({ ...o }));
+  const remember = (label, before, newIds) => setUndo({ label, before, newIds, at: Date.now() });
+  useEffect(() => {
+    if (!undo) return undefined;
+    const t = setTimeout(() => setUndo(null), 30000);
+    return () => clearTimeout(t);
+  }, [undo]);
+  const runUndo = async () => {
+    const u = undo;
+    if (!u) return;
+    setUndo(null);
+    let ok = true;
+    if (u.newIds.length) ok = (await onDelete(u.newIds)) && ok;
+    if (u.before.length) ok = !!(await onImport(u.before)) && ok;
+    showToast(ok ? "되돌렸어요" : "되돌리기가 일부 안 됐어요. 목록을 확인해 주세요", ok ? undefined : "warn");
+  };
 
   const takeFile = async (file) => {
     if (!file) return;
@@ -2927,11 +2947,14 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
     const m = pending.map;
     const good = [];
     let bad = 0;
-    pending.rows.forEach((r) => {
+    const badRows = [];
+    pending.rows.forEach((r, idx) => {
       const name = String(r[m.name] || "").trim().slice(0, 40);
       const p4 = onlyDigits(r[m.phone]).slice(-4);
       if (!name || p4.length !== 4) {
         bad++;
+        if (badRows.length < 3)
+          badRows.push({ n: idx + 1, why: !name ? "이름이 비어 있어요" : "전화번호가 4자리보다 짧아요 (" + (String(r[m.phone] || "").trim() || "빈칸") + ")" });
         return;
       }
       const inv = m.inv ? String(r[m.inv] || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 40) : "";
@@ -2945,20 +2968,23 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
       });
     });
     const pl = planImport(orders, good);
-    return { rows: good, items: pl.items, add: pl.add, upd: pl.upd, same: pl.same, bad };
+    return { rows: good, items: pl.items, add: pl.add, upd: pl.upd, same: pl.same, bad, badRows };
   }, [pending, orders]);
 
   const doImport = async () => {
     if (!parsed || !parsed.rows.length) return;
-    setBusy(true);
     if (!parsed.items.length) {
       showToast("바뀐 게 없어요. 이미 다 들어가 있어요");
       setPending(null);
       return;
     }
-    const ok = await onImport(parsed.items);
+    setBusy(true);
+    const before = snapshot(parsed.items.filter((o) => o.id).map((o) => o.id));
+    const saved = await onImport(parsed.items);
     setBusy(false);
-    if (ok) {
+    if (saved) {
+      const newIds = Array.isArray(saved) ? saved.filter((o) => !before.some((b) => b.id === o.id)).map((o) => o.id) : [];
+      remember("엑셀 반영 · 새 주문 " + parsed.add + "건, 바뀐 주문 " + parsed.upd + "건", before, newIds);
       showToast("새 주문 " + parsed.add + "건, 바뀐 주문 " + parsed.upd + "건을 반영했어요");
       setPending(null);
     }
@@ -3006,8 +3032,10 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
   const selPeople = new Set(orders.filter((o) => sel.includes(o.id)).map((o) => o.name + "|" + o.p4)).size;
   const runBulk = async (patch, msg) => {
     if (!sel.length) return;
+    const before = snapshot(sel);
     const ok = await onBulk(sel, patch);
     if (ok) {
+      remember(selPeople + "명 " + msg, before, []);
       showToast(selPeople + "명 " + msg);
       setSel([]);
     }
@@ -3095,6 +3123,39 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
               {pending.label} · {pending.rows.length}줄
             </p>
             <p className="mt-0.5 text-[12.5px] text-neutral-500">칸을 맞게 찾았는지 확인해 주세요. 틀리면 바꿔 주세요.</p>
+            {!pending.map.name || !pending.map.phone ? (
+              <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13.5px] leading-relaxed text-rose-800" role="alert">
+                <p className="font-bold">
+                  {[!pending.map.name ? "받는 분 이름" : "", !pending.map.phone ? "전화번호" : ""].filter(Boolean).join("·")} 칸을 찾지 못했어요
+                </p>
+                <p className="mt-1">아래 칸에서 직접 골라 주세요. 이 파일에 있는 칸 이름은 이래요:</p>
+                <p className="mt-1 text-[12.5px] text-rose-700">{pending.cols.slice(0, 20).join(" · ")}</p>
+              </div>
+            ) : null}
+            {pending.map.name && pending.map.phone && !pending.map.inv ? (
+              <p className="mt-3 rounded-xl bg-blue-50 px-4 py-2.5 text-[13px] text-blue-800">
+                송장번호 칸이 없어요. 주문만 등록돼요. 송장 엑셀이라면 &lsquo;송장번호&rsquo; 칸을 직접 골라 주세요.
+              </p>
+            ) : null}
+            {parsed.bad && pending.map.name && pending.map.phone ? (
+              <div className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900">
+                <p>
+                  <b>{parsed.bad}줄은 건너뛰어요.</b> 이름이나 전화번호가 없는 줄이에요.
+                </p>
+                <ul className="mt-1 text-[12.5px] text-amber-800">
+                  {parsed.badRows.map((b) => (
+                    <li key={b.n}>
+                      · {b.n}번째 줄: {b.why}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {pending.map.name && pending.map.phone && !parsed.rows.length ? (
+              <p className="mt-3 rounded-xl bg-rose-50 px-4 py-2.5 text-[13px] font-medium text-rose-800">
+                읽을 수 있는 줄이 하나도 없어요. 고른 칸이 맞는지 다시 확인해 주세요.
+              </p>
+            ) : null}
             <div className="mt-3 grid gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
               {SHEET_FIELDS.map((f) => (
                 <Field key={f.k} label={f.label + (f.req ? " *" : "")}>
@@ -3235,6 +3296,20 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
             ]}
           />
         </div>
+        {undo ? (
+          <div className="mt-3 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5" role="status">
+            <RotateCcw size={16} className="shrink-0 text-amber-700" />
+            <p className="min-w-0 flex-1 text-[13.5px] text-amber-900">
+              방금: <b>{undo.label}</b>
+            </p>
+            <button type="button" onClick={runUndo} className="shrink-0 rounded-lg bg-amber-600 px-3 py-1.5 text-[13px] font-bold text-white">
+              되돌리기
+            </button>
+            <button type="button" onClick={() => setUndo(null)} aria-label="되돌리기 알림 닫기" className="shrink-0 text-amber-700">
+              <X size={16} />
+            </button>
+          </div>
+        ) : null}
         {sel.length ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-neutral-900 px-4 py-3 text-white">
             <span className="text-[13.5px] font-bold">
@@ -3417,8 +3492,10 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
           group={groupEdit}
           onClose={() => setGroupEdit(null)}
           onSave={async (patch) => {
+            const before = snapshot(groupEdit.ids);
             const ok = await onBulk(groupEdit.ids, patch);
             if (ok) {
+              remember(groupEdit.name + "님 주문 수정", before, []);
               setGroupEdit(null);
               showToast(groupEdit.name + "님 주문 " + groupEdit.ids.length + "개에 저장했어요");
             }
@@ -3431,8 +3508,10 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
           order={edit}
           onClose={() => setEdit(null)}
           onSave={async (o) => {
+            const before = o.id ? snapshot([o.id]) : [];
             const ok = await onSave(o);
             if (ok) {
+              if (o.id) remember(o.name + "님 상품 수정", before, []);
               setEdit(null);
               showToast("저장했어요");
             }
@@ -3454,8 +3533,10 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
                 onClick={async () => {
                   const ids = confirmDel.ids;
                   setConfirmDel(null);
+                  const before = snapshot(ids);
                   const ok = await onDelete(ids);
                   if (ok) {
+                    remember("상품 " + ids.length + "개 삭제", before, []);
                     showToast("상품 " + ids.length + "개를 지웠어요");
                     setSel((p) => p.filter((x) => !ids.includes(x)));
                   }
@@ -7323,17 +7404,18 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
     lookupAsks: async (name, p4) => asks.filter((a) => a.name === name && a.p4 === p4),
   };
   const demoImport = async (items) => {
+    const stamp0 = Date.now();
+    const saved = items.map((o, i) => {
+      const { _key, ...rest } = o;
+      return rest.id ? rest : { ...rest, id: "o-" + stamp0 + "-" + i, created_at: new Date().toISOString() };
+    });
     setOrders((prev) => {
-      const byId = new Map(items.filter((o) => o.id).map((o) => [o.id, o]));
-      const fresh = items
-        .filter((o) => !o.id)
-        .map((o, i) => {
-          const { _key, ...rest } = o;
-          return { ...rest, id: "o-" + Date.now() + "-" + i, created_at: new Date().toISOString() };
-        });
+      const known = new Set(prev.map((o) => o.id));
+      const byId = new Map(saved.map((o) => [o.id, o]));
+      const fresh = saved.filter((o) => !known.has(o.id));
       return [...fresh, ...prev.map((o) => (byId.has(o.id) ? { ...o, ...byId.get(o.id) } : o))];
     });
-    return true;
+    return saved;
   };
   const demoSaveOrder = async (o) => {
     if (o.id) setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, ...o } : x)));

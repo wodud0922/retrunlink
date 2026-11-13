@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftRight,
   ArrowRight,
@@ -460,6 +460,24 @@ function won(n) {
 function pad(n) {
   return String(n).padStart(2, "0");
 }
+
+const DEMO_SETTINGS = { ...DEFAULT_SETTINGS, shipNotice: "11월 공구는 마감 후 7~10일 안에 주문 순서대로 보내요." };
+
+// 예시 주문을 바꾸면 이 숫자를 올려요. 예전에 저장된 데모 주문 대신 새 예시가 보여요.
+const DEMO_ORDERS_VERSION = 3;
+
+const DEMO_ORDERS = [
+  { id: "o-1", name: "김민지", p4: "5678", item: "Classic Wool Jacket (블랙 M)", courier: "CJ대한통운", inv: "689012340001", paid: true, shipDate: "2026-11-10", created_at: "2026-11-08T10:00:00" },
+  { id: "o-2", name: "김민지", p4: "5678", item: "Cotton Knit Vest (오트밀)", courier: "", inv: "", paid: true, shipDate: "2026-11-20", created_at: "2026-11-11T09:00:00" },
+  { id: "o-3", name: "이서연", p4: "5432", item: "Wide Denim Pants (M)", courier: "롯데택배", inv: "245678901234", paid: true, shipDate: "", created_at: "2026-11-07T15:00:00" },
+  { id: "o-4", name: "박지호", p4: "1234", item: "Linen Half Shirt (아이보리 L)", courier: "", inv: "", paid: false, shipDate: "", created_at: "2026-11-12T11:00:00" },
+  { id: "o-6", name: "정다은", p4: "2222", item: "Wide Denim Pants (S)", courier: "", inv: "", paid: true, shipDate: "2026-11-20", created_at: "2026-11-12T14:00:00" },
+  { id: "o-7", name: "정다은", p4: "2222", item: "Cotton Knit Vest (그레이)", courier: "", inv: "", paid: true, shipDate: "2026-11-20", created_at: "2026-11-12T14:00:00" },
+  { id: "o-5", name: "최유나", p4: "3456", item: "Balloon Skirt (블랙 FREE)", courier: "", inv: "", paid: true, shipDate: "", created_at: "2026-11-12T13:00:00" },
+];
+const DEMO_ASKS = [
+  { id: "a-1", name: "최유나", p4: "3456", message: "입금자명을 엄마 이름(이정희)으로 보냈어요!", answer: "", created_at: "2026-11-12T13:20:00" },
+];
 
 function stamp() {
   const d = new Date();
@@ -2331,12 +2349,1405 @@ function MyRequests({ fetchLookup, settings, lookup, setLookup, showToast, secti
   );
 }
 
-export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdmin, onMetric, showTracking = true }) {
+/* ------------------------------------------------------------------ */
+/* CS 센터: 주문·송장 조회 + 1:1 문의                                     */
+/* ------------------------------------------------------------------ */
+
+const COURIER_NAMES = ["CJ대한통운", "롯데택배", "한진택배", "우체국택배", "로젠택배", "CU 편의점택배", "GS25 편의점택배", "경동택배"];
+
+function onlyDigits(s) {
+  return String(s == null ? "" : s).replace(/\D/g, "");
+}
+
+function trackSearchUrl(o) {
+  return "https://search.naver.com/search.naver?query=" + encodeURIComponent((o.courier || "") + " " + o.inv);
+}
+
+function shortDate(t) {
+  if (!t) return "";
+  const d = new Date(t);
+  if (isNaN(d.getTime())) return "";
+  return d.getMonth() + 1 + "/" + d.getDate() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+
+// 엑셀을 읽는 도구(SheetJS)는 처음 쓸 때만 불러와요.
+let xlsxPromise = null;
+function loadXlsx() {
+  if (typeof window !== "undefined" && window.XLSX) return Promise.resolve(window.XLSX);
+  if (xlsxPromise) return xlsxPromise;
+  xlsxPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    s.async = true;
+    s.onload = () => (window.XLSX ? resolve(window.XLSX) : reject(new Error("xlsx")));
+    s.onerror = () => {
+      xlsxPromise = null;
+      reject(new Error("xlsx"));
+    };
+    document.head.appendChild(s);
+  });
+  return xlsxPromise;
+}
+
+// CSV 는 도구 없이도 읽어요.
+function parseCsvGrid(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"' && text[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else if (c === '"') q = false;
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else cell += c;
+  }
+  if (cell || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
+}
+
+async function readSheet(file) {
+  const name = (file.name || "").toLowerCase();
+  if (name.endsWith(".csv")) {
+    const buf = await file.arrayBuffer();
+    let text = new TextDecoder("utf-8").decode(buf);
+    if (text.includes("�")) {
+      try {
+        text = new TextDecoder("euc-kr").decode(buf);
+      } catch (e) {
+        /* 그대로 써요 */
+      }
+    }
+    return rowsFromGrid(parseCsvGrid(text));
+  }
+  const XLSX = await loadXlsx();
+  const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+  const grid = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", raw: false });
+  return rowsFromGrid(grid);
+}
+
+// 택배사 엑셀은 위에 제목 줄이 몇 줄 있는 경우가 많아요. 칸 이름이 있는 줄을 찾아서 거기부터 읽어요.
+function rowsFromGrid(grid) {
+  const keys = SHEET_FIELDS.reduce((a, f) => a.concat(f.keys), []).map(normKey);
+  let headAt = 0;
+  let best = 0;
+  grid.slice(0, 15).forEach((row, i) => {
+    const hit = row.filter((c) => {
+      const n = normKey(c);
+      return n && keys.some((k) => n.indexOf(k) > -1);
+    }).length;
+    if (hit > best) {
+      best = hit;
+      headAt = i;
+    }
+  });
+  const head = (grid[headAt] || []).map((h, i) => String(h || "").replace(/^\uFEFF/, "").trim() || "칸" + (i + 1));
+  return grid
+    .slice(headAt + 1)
+    .filter((r) => r.some((v) => String(v).trim()))
+    .map((r) => {
+      const o = {};
+      head.forEach((h, i) => (o[h] = r[i] == null ? "" : r[i]));
+      return o;
+    });
+}
+
+const SHEET_FIELDS = [
+  { k: "name", label: "받는 분 이름", req: true, keys: ["받는분성명", "받는분", "수취인명", "수취인", "수령인", "수하인명", "수하인", "고객명", "주문자명", "구매자명", "이름", "성함"] },
+  { k: "phone", label: "전화번호", req: true, keys: ["받는분전화번호", "받는분핸드폰", "수취인연락처", "수하인휴대폰", "수하인전화", "휴대폰", "핸드폰", "연락처", "전화번호", "전화"] },
+  { k: "item", label: "상품명", req: false, keys: ["상품명", "품목명", "품목", "상품", "내품명", "옵션정보"] },
+  { k: "inv", label: "송장번호", req: false, keys: ["운송장번호", "송장번호", "운송장", "송장", "등기번호"] },
+  { k: "courier", label: "택배사", req: false, keys: ["택배사", "배송사", "택배회사"] },
+];
+
+function normKey(s) {
+  return String(s || "").replace(/[\s()·\-_/.]/g, "");
+}
+
+function autoMapColumns(cols) {
+  const map = {};
+  SHEET_FIELDS.forEach((f) => {
+    let found = "";
+    f.keys.forEach((k) => {
+      if (found) return;
+      const hit = cols.find((c) => normKey(c).indexOf(normKey(k)) > -1);
+      if (hit) found = hit;
+    });
+    map[f.k] = found;
+  });
+  // 전화번호가 상품명·송장 칸과 겹치지 않게
+  if (map.phone && (map.phone === map.inv || map.phone === map.item)) map.phone = "";
+  return map;
+}
+
+
+// 엑셀 줄들을 지금 주문 목록에 어떻게 합칠지 계산해요.
+// 송장 줄은 같은 사람(이름 + 뒤 4자리)의 송장 없는 주문에 붙여요. 상품명이 "외 2건"처럼 달라도 붙어요.
+function planImport(orders, rows) {
+  const cur = orders.map((o) => ({ ...o }));
+  const touched = new Map();
+  let add = 0;
+  let upd = 0;
+  let same = 0;
+  const invCount = {};
+  rows.forEach((r) => {
+    if (r.inv) invCount[r.name + "|" + r.p4] = (invCount[r.name + "|" + r.p4] || 0) + 1;
+  });
+  let tmp = 0;
+  rows.forEach((r) => {
+    const mine = cur.filter((o) => o.name === r.name && o.p4 === r.p4);
+    let targets = [];
+    if (r.inv) {
+      targets = mine.filter((o) => o.inv === r.inv);
+      if (!targets.length && r.item) targets = mine.filter((o) => o.item === r.item);
+      if (!targets.length) {
+        const open = mine.filter((o) => !o.inv);
+        targets = invCount[r.name + "|" + r.p4] > 1 ? open.slice(0, 1) : open;
+      }
+    } else {
+      targets = mine.filter((o) => !r.item || !o.item || o.item === r.item).slice(0, 1);
+    }
+    if (targets.length) {
+      targets.forEach((ex) => {
+        let changed = false;
+        if (r.inv && ex.inv !== r.inv) {
+          ex.inv = r.inv;
+          ex.courier = r.courier;
+          changed = true;
+        }
+        if ((r.paid || r.inv) && !ex.paid) {
+          ex.paid = true;
+          changed = true;
+        }
+        if (r.item && !ex.item) {
+          ex.item = r.item;
+          changed = true;
+        }
+        if (changed) {
+          touched.set(ex.id, ex);
+          upd++;
+        } else same++;
+      });
+    } else {
+      const n = { ...r, id: "", _key: "new-" + tmp++, paid: !!r.paid || !!r.inv, shipDate: "" };
+      cur.unshift(n);
+      touched.set(n._key, n);
+      add++;
+    }
+  });
+  return { items: [...touched.values()], add, upd, same };
+}
+
+function sameOrder(o, r) {
+  return o.name === r.name && o.p4 === r.p4 && (!r.item || !o.item || o.item === r.item);
+}
+
+/* ---------- 손님: 배송 조회 ---------- */
+
+const ORDER_STEPS = ["주문 확인", "결제 확인", "발송 준비", "송장 나옴"];
+const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
+
+// 주문이 지금 몇 번째 단계인지 (0부터)
+function orderStep(o) {
+  if (o.inv) return 3;
+  if (o.shipDate) return 2;
+  if (o.paid) return 1;
+  return 0;
+}
+
+function orderBadge(o) {
+  const st = orderStep(o);
+  return [
+    { label: "결제 확인 전", cls: "bg-neutral-100 text-neutral-600" },
+    { label: "결제 확인", cls: "bg-blue-50 text-blue-700" },
+    { label: "발송 준비", cls: "bg-orange-50 text-orange-700" },
+    { label: "송장 등록", cls: "bg-emerald-50 text-emerald-700" },
+  ][st];
+}
+
+function prettyDate(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(ymd || "");
+  if (!m) return "";
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number(m[2]) + "월 " + Number(m[3]) + "일(" + WEEK[d.getDay()] + ")";
+}
+
+/* ---------- 손님: 내 주문 조회 ---------- */
+
+// 손님 화면: 상태·예정일·송장이 같은 상품끼리 카드 하나로 묶어요. (나눠 보내면 카드가 나뉘어요)
+function groupBoxes(list) {
+  const map = new Map();
+  list.forEach((o) => {
+    const key = o.inv ? "inv:" + o.inv : "s:" + orderStep(o) + ":" + (o.shipDate || "");
+    if (!map.has(key)) map.set(key, { ...o, id: key, names: [] });
+    map.get(key).names.push(o.item || "주문 상품");
+  });
+  return [...map.values()];
+}
+
+function ShipLookup({ cs, settings, onMetric, showToast, onGoReturn }) {
+  const [name, setName] = useState("");
+  const [phone4, setPhone4] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [list, setList] = useState(null);
+
+  const run = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return setError("성함을 적어 주세요");
+    if (!/^\d{4}$/.test(phone4)) return setError("전화번호 뒤 4자리를 숫자로 적어 주세요");
+    setError("");
+    setLoading(true);
+    try {
+      const res = await cs.lookupOrders(name.trim(), phone4);
+      setList(res);
+      if (res.length && onMetric) onMetric("lookup");
+    } catch (x) {
+      setList(null);
+      setError("조회가 잠시 안 돼요. 잠시 후 다시 해 주세요");
+    }
+    setLoading(false);
+  };
+
+  const notice = (settings.shipNotice || "").trim();
+
+  return (
+    <CustomerCard>
+      <CustomerTitle
+        icon={<Package size={16} />}
+        title="내 주문 조회"
+        desc="결제 확인, 발송 예정일, 송장번호를 여기서 바로 확인해요."
+      />
+      {notice ? (
+        <div className="mb-4 flex gap-2.5 rounded-xl bg-amber-50 px-3.5 py-3 text-[13.5px] leading-relaxed text-amber-900">
+          <Clock size={16} className="mt-0.5 shrink-0" />
+          <p className="whitespace-pre-line">{notice}</p>
+        </div>
+      ) : null}
+      <form onSubmit={run} className="grid grid-cols-2 gap-2.5">
+        <Field label="주문자 성함">
+          <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} placeholder="김민지" autoComplete="name" />
+        </Field>
+        <Field label="전화번호 뒤 4자리">
+          <input
+            value={phone4}
+            onChange={(e) => setPhone4(onlyDigits(e.target.value).slice(0, 4))}
+            className={inputClass}
+            inputMode="numeric"
+            placeholder="5678"
+          />
+        </Field>
+        <button
+          type="submit"
+          disabled={loading}
+          className="col-span-2 rounded-xl bg-neutral-900 py-3.5 text-[15px] font-bold text-white transition active:scale-[0.98] disabled:opacity-60"
+        >
+          {loading ? "찾는 중…" : "조회하기"}
+        </button>
+      </form>
+      {error ? <p className="mt-2 text-[13px] font-medium text-rose-500">{error}</p> : null}
+      <div aria-live="polite">
+        {list && !list.length ? (
+          <p className="mt-4 rounded-xl bg-neutral-50 p-4 text-[13.5px] leading-relaxed text-neutral-600">
+            조회되는 주문이 없어요. 주문할 때 쓴 이름과 번호가 맞는지 확인해 주세요. 방금 주문했다면 사장님이 확인하는 대로 여기에 떠요.
+          </p>
+        ) : null}
+        {list && list.length
+          ? groupBoxes(list).map((o) => {
+              const st = orderStep(o);
+              const msg = [
+                "주문이 잘 들어왔어요. 결제가 확인되면 여기에 바로 표시돼요.",
+                "결제가 확인됐어요. 발송 날짜가 정해지면 여기에 알려 드려요.",
+                o.shipDate ? prettyDate(o.shipDate) + "쯤 보낼 예정이에요." : "발송을 준비하고 있어요.",
+                "송장이 나왔어요. 택배 기사님이 가져가면 하루 안에 위치 조회가 돼요.",
+              ][st];
+              return (
+                <div key={o.id} className="mt-4 rounded-xl border border-neutral-200 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      {o.names.map((n, i) => (
+                        <p key={i} className="text-[15px] font-bold leading-snug text-neutral-900">
+                          {n}
+                        </p>
+                      ))}
+                    </div>
+                    <span className={"shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold " + orderBadge(o).cls}>
+                      {ORDER_STEPS[st]}
+                    </span>
+                  </div>
+                  {o.names.length > 1 ? (
+                    <p className="mt-1 text-[12px] text-neutral-500">상품 {o.names.length}개 · {o.inv ? "한 상자로 같이 보내요" : "같이 준비하고 있어요"}</p>
+                  ) : null}
+                  <ol className="mt-3 grid grid-cols-4 gap-1 text-center text-[11.5px]">
+                    {ORDER_STEPS.map((s, i) => (
+                      <li key={s} className="flex flex-col items-center gap-1">
+                        <span
+                          className={
+                            "flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold " +
+                            (i <= st ? "bg-emerald-600 text-white" : "border border-neutral-300 bg-white text-neutral-400")
+                          }
+                        >
+                          {i < st ? <Check size={13} /> : i + 1}
+                        </span>
+                        <span className={i <= st ? "font-semibold text-neutral-800" : "text-neutral-400"}>{s}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-3 rounded-lg bg-neutral-50 px-3 py-2.5 text-[13.5px] leading-relaxed text-neutral-700">{msg}</p>
+                  {st === 2 && o.shipDate ? (
+                    <p className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-orange-700">
+                      <Truck size={14} /> 발송 예정 {prettyDate(o.shipDate)}
+                    </p>
+                  ) : null}
+                  {o.inv ? (
+                    <>
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2.5">
+                        <p className="min-w-0 text-[13.5px] text-neutral-700">
+                          {o.courier} <b className="text-neutral-900">{o.inv}</b>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const ok = await copyText(o.inv);
+                            showToast(ok ? "송장번호를 복사했어요" : "복사가 안 됐어요");
+                          }}
+                          className="shrink-0 rounded-lg bg-neutral-900 px-3 py-1.5 text-[12.5px] font-semibold text-white"
+                        >
+                          복사
+                        </button>
+                      </div>
+                      <a
+                        href={trackSearchUrl(o)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-neutral-300 py-3 text-[14px] font-semibold text-neutral-800"
+                      >
+                        <MapPin size={15} /> 지금 어디쯤인지 보기
+                      </a>
+                    </>
+                  ) : null}
+                </div>
+              );
+            })
+          : null}
+        {list && list.length ? (
+          <button
+            type="button"
+            onClick={onGoReturn}
+            className="mt-3 w-full text-center text-[13px] font-semibold text-neutral-600 underline underline-offset-2"
+          >
+            받은 상품을 교환·반품하고 싶어요
+          </button>
+        ) : null}
+      </div>
+    </CustomerCard>
+  );
+}
+
+/* ---------- 손님: 1:1 문의 ---------- */
+
+function AskCard({ cs, settings, showToast }) {
+  const [name, setName] = useState("");
+  const [phone4, setPhone4] = useState("");
+  const [msg, setMsg] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [mine, setMine] = useState(null);
+
+  const check = () => {
+    if (!name.trim()) {
+      setError("성함을 적어 주세요");
+      return false;
+    }
+    if (!/^\d{4}$/.test(phone4)) {
+      setError("전화번호 뒤 4자리를 숫자로 적어 주세요");
+      return false;
+    }
+    setError("");
+    return true;
+  };
+
+  const loadMine = async () => {
+    if (!check()) return;
+    try {
+      setMine(await cs.lookupAsks(name.trim(), phone4));
+    } catch (e) {
+      setError("불러오기가 잠시 안 돼요. 잠시 후 다시 해 주세요");
+    }
+  };
+
+  const send = async (e) => {
+    e.preventDefault();
+    if (!check()) return;
+    if (!msg.trim()) return setError("문의 내용을 적어 주세요");
+    setBusy(true);
+    const ok = await cs.submitAsk(name.trim(), phone4, msg.trim());
+    setBusy(false);
+    if (!ok) {
+      setError("보내지 못했어요. 잠시 후 다시 해 주세요");
+      return;
+    }
+    setMsg("");
+    showToast("문의를 남겼어요. 답변은 여기서 확인할 수 있어요");
+    loadMine();
+  };
+
+  return (
+    <>
+      <CustomerCard>
+        <CustomerTitle icon={<MessageCircle size={16} />} title="1:1 문의" desc="남겨 주시면 사장님이 확인하고 답을 드려요." />
+        <form onSubmit={send} className="space-y-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
+            <Field label="성함">
+              <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} autoComplete="name" />
+            </Field>
+            <Field label="전화번호 뒤 4자리">
+              <input
+                value={phone4}
+                onChange={(e) => setPhone4(onlyDigits(e.target.value).slice(0, 4))}
+                className={inputClass}
+                inputMode="numeric"
+              />
+            </Field>
+          </div>
+          <Field label="문의 내용" hint={msg.length + " / 500"}>
+            <textarea
+              value={msg}
+              onChange={(e) => setMsg(e.target.value.slice(0, 500))}
+              rows={4}
+              className={inputClass + " resize-none"}
+              placeholder="예) 입금자명을 엄마 이름으로 보냈어요"
+            />
+          </Field>
+          {error ? <p className="text-[13px] font-medium text-rose-500">{error}</p> : null}
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded-xl bg-neutral-900 py-3.5 text-[15px] font-bold text-white transition active:scale-[0.98] disabled:opacity-60"
+          >
+            {busy ? "보내는 중…" : "문의 남기기"}
+          </button>
+          <button
+            type="button"
+            onClick={loadMine}
+            className="w-full text-center text-[13px] font-semibold text-neutral-600 underline underline-offset-2"
+          >
+            내가 남긴 문의와 답변 보기
+          </button>
+        </form>
+        {mine ? (
+          <div className="mt-4 space-y-2" aria-live="polite">
+            {mine.length ? (
+              mine.map((a) => (
+                <div key={a.id} className="rounded-xl border border-neutral-200 p-3.5 text-[13.5px]">
+                  <p className="text-[12px] text-neutral-400">{shortDate(a.created_at)}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-neutral-800">{a.message}</p>
+                  {a.answer ? (
+                    <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2.5">
+                      <p className="text-[12px] font-bold text-emerald-700">사장님 답변</p>
+                      <p className="mt-0.5 whitespace-pre-wrap text-neutral-800">{a.answer}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-[12.5px] text-neutral-400">답변을 기다리는 중이에요</p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="rounded-xl bg-neutral-50 p-3.5 text-[13px] text-neutral-500">아직 남긴 문의가 없어요.</p>
+            )}
+          </div>
+        ) : null}
+      </CustomerCard>
+      {validKakaoUrl(settings.kakaoUrl) ? (
+        <a
+          href={normalizeKakaoUrl(settings.kakaoUrl)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] py-4 text-[15px] font-bold text-[#191919] shadow-card transition active:scale-[0.98]"
+        >
+          <MessageCircle size={18} fill="#191919" />
+          급하면 카카오톡으로 바로 문의하기
+        </a>
+      ) : null}
+    </>
+  );
+}
+
+/* ---------- 사장님: 주문·송장 ---------- */
+
+function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onSaveSettings, showToast }) {
+  const [sel, setSel] = useState([]);
+  const [bulkDate, setBulkDate] = useState("");
+  const [notice, setNotice] = useState(settings.shipNotice || "");
+  const [pending, setPending] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [over, setOver] = useState(false);
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [edit, setEdit] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
+  const fileRef = useRef(null);
+
+  const takeFile = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const rows = (await readSheet(file)).filter((r) => Object.values(r).some((v) => String(v).trim()));
+      if (!rows.length) {
+        showToast("빈 파일이에요", "warn");
+      } else {
+        const cols = Object.keys(rows[0]);
+        setPending({ label: file.name, rows, cols, map: autoMapColumns(cols), courier: COURIER_NAMES[0], paidAll: true });
+      }
+    } catch (e) {
+      showToast("파일을 읽지 못했어요. 엑셀(.xlsx)이나 CSV 파일인지 확인해 주세요", "warn");
+    }
+    setBusy(false);
+  };
+
+  const parsed = useMemo(() => {
+    if (!pending) return null;
+    const m = pending.map;
+    const good = [];
+    let bad = 0;
+    pending.rows.forEach((r) => {
+      const name = String(r[m.name] || "").trim().slice(0, 40);
+      const p4 = onlyDigits(r[m.phone]).slice(-4);
+      if (!name || p4.length !== 4) {
+        bad++;
+        return;
+      }
+      const inv = m.inv ? String(r[m.inv] || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 40) : "";
+      good.push({
+        name,
+        p4,
+        item: m.item ? String(r[m.item] || "").trim().slice(0, 200) : "",
+        inv,
+        courier: inv ? ((m.courier ? String(r[m.courier] || "").trim() : "") || pending.courier).slice(0, 30) : "",
+        paid: !!pending.paidAll || !!inv,
+      });
+    });
+    const pl = planImport(orders, good);
+    return { rows: good, items: pl.items, add: pl.add, upd: pl.upd, same: pl.same, bad };
+  }, [pending, orders]);
+
+  const doImport = async () => {
+    if (!parsed || !parsed.rows.length) return;
+    setBusy(true);
+    if (!parsed.items.length) {
+      showToast("바뀐 게 없어요. 이미 다 들어가 있어요");
+      setPending(null);
+      return;
+    }
+    const ok = await onImport(parsed.items);
+    setBusy(false);
+    if (ok) {
+      showToast("새 주문 " + parsed.add + "건, 바뀐 주문 " + parsed.upd + "건을 반영했어요");
+      setPending(null);
+    }
+  };
+
+  // 같은 사람(이름 + 뒤 4자리)의 상품들을 한 줄로 묶어요.
+  const groups = useMemo(() => {
+    const k = normKey(q).toLowerCase();
+    const map = new Map();
+    orders.forEach((o) => {
+      const key = o.name + "|" + o.p4;
+      if (!map.has(key)) map.set(key, { key, name: o.name, p4: o.p4, items: [], at: o.created_at || "" });
+      const g = map.get(key);
+      g.items.push(o);
+      if (String(o.created_at || "") > g.at) g.at = String(o.created_at || "");
+    });
+    return [...map.values()]
+      .map((g) => {
+        const steps = g.items.map(orderStep);
+        const step = Math.min(...steps);
+        const invs = [...new Set(g.items.filter((o) => o.inv).map((o) => o.courier + " · " + o.inv))];
+        const dates = [...new Set(g.items.filter((o) => !o.inv && o.shipDate).map((o) => o.shipDate))];
+        return { ...g, step, mixed: Math.max(...steps) !== step, invs, dates, ids: g.items.map((o) => o.id) };
+      })
+      .filter((g) => {
+        if (filter === "unpaid" && g.step !== 0) return false;
+        if (filter === "ready" && (g.step === 0 || g.step === 3)) return false;
+        if (filter === "sent" && g.step !== 3) return false;
+        if (!k) return true;
+        return normKey(g.name + g.p4 + g.items.map((o) => o.inv + o.item).join("")).toLowerCase().indexOf(k) > -1;
+      })
+      .sort((a, b) => (a.at < b.at ? 1 : -1));
+  }, [orders, q, filter]);
+  const people = new Set(orders.map((o) => o.name + "|" + o.p4)).size;
+  const unpaid = orders.filter((o) => orderStep(o) === 0).length;
+  const ORDER_PAGE = 20;
+  const pages = Math.max(1, Math.ceil(groups.length / ORDER_PAGE));
+  const curPage = Math.min(page, pages);
+  const shown = groups.slice((curPage - 1) * ORDER_PAGE, curPage * ORDER_PAGE);
+  const allOn = shown.length > 0 && shown.every((g) => g.ids.every((id) => sel.includes(id)));
+  const toggleGroup = (g) => {
+    const on = g.ids.every((id) => sel.includes(id));
+    setSel((p) => (on ? p.filter((x) => !g.ids.includes(x)) : [...new Set([...p, ...g.ids])]));
+  };
+  const selPeople = new Set(orders.filter((o) => sel.includes(o.id)).map((o) => o.name + "|" + o.p4)).size;
+  const runBulk = async (patch, msg) => {
+    if (!sel.length) return;
+    const ok = await onBulk(sel, patch);
+    if (ok) {
+      showToast(selPeople + "명 " + msg);
+      setSel([]);
+    }
+  };
+  const [open, setOpen] = useState({});
+  const [groupEdit, setGroupEdit] = useState(null);
+
+  return (
+    <div className="space-y-4">
+      <section className={panelClass + " p-5"}>
+        <h2 className="text-[17px] font-bold text-neutral-900">손님에게 보일 발송 안내</h2>
+        <p className="mt-1 text-[13px] text-neutral-500">
+          손님이 &lsquo;주문 조회&rsquo;를 열면 맨 위에 보여요. &ldquo;언제 보내요?&rdquo; 문의가 가장 많이 줄어드는 칸이에요.
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <label className="flex-1">
+            <span className="sr-only">발송 안내 문구</span>
+            <textarea
+              value={notice}
+              onChange={(e) => setNotice(e.target.value.slice(0, 200))}
+              rows={2}
+              placeholder="예) 11월 공구는 마감 후 7~10일 안에 주문 순서대로 보내요. 계좌이체 입금은 하루 한 번 저녁에 확인해요."
+              className={inputClass + " resize-none text-[14px]"}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={notice.trim() === (settings.shipNotice || "").trim()}
+            onClick={() => {
+              onSaveSettings({ ...settings, shipNotice: notice.trim() });
+              showToast("발송 안내를 저장했어요");
+            }}
+            className="rounded-xl bg-neutral-900 px-5 py-3 text-[14px] font-bold text-white disabled:opacity-40 sm:self-stretch"
+          >
+            저장
+          </button>
+        </div>
+      </section>
+
+      <section className={panelClass + " p-5"}>
+        <h2 className="text-[17px] font-bold text-neutral-900">주문·송장 엑셀 올리기</h2>
+        <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
+          주문 엑셀을 올리면 손님이 &lsquo;주문 확인&rsquo;을 볼 수 있어요. 나중에 송장 엑셀을 올리면 같은 사람(이름 + 전화번호 뒤 4자리)에게
+          송장이 알아서 붙어요.
+        </p>
+        <button
+          type="button"
+          onClick={() => fileRef.current && fileRef.current.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(false);
+            takeFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+          }}
+          className={
+            "mt-4 flex w-full flex-col items-center rounded-2xl border-2 border-dashed px-4 py-7 text-center transition " +
+            (over ? "border-emerald-500 bg-emerald-50" : "border-neutral-300 bg-neutral-50 hover:border-neutral-400")
+          }
+        >
+          <Inbox size={28} className="text-emerald-600" />
+          <span className="mt-2 text-[15px] font-bold text-neutral-900">
+            {busy ? "읽는 중…" : "엑셀(.xlsx, .csv)을 끌어다 놓거나 눌러서 고르세요"}
+          </span>
+          <span className="mt-1 text-[12.5px] text-neutral-500">택배사·스마트스토어 엑셀 그대로 OK · 칸 이름을 알아서 찾아요</span>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          aria-label="엑셀 파일 고르기"
+          onChange={(e) => {
+            takeFile(e.target.files && e.target.files[0]);
+            e.target.value = "";
+          }}
+        />
+
+        {pending && parsed ? (
+          <div className="mt-5 border-t border-neutral-100 pt-4">
+            <p className="text-[15px] font-bold text-neutral-900">
+              {pending.label} · {pending.rows.length}줄
+            </p>
+            <p className="mt-0.5 text-[12.5px] text-neutral-500">칸을 맞게 찾았는지 확인해 주세요. 틀리면 바꿔 주세요.</p>
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+              {SHEET_FIELDS.map((f) => (
+                <Field key={f.k} label={f.label + (f.req ? " *" : "")}>
+                  <select
+                    value={pending.map[f.k]}
+                    onChange={(e) => setPending({ ...pending, map: { ...pending.map, [f.k]: e.target.value } })}
+                    className={inputClass + " py-2.5 text-[14px]"}
+                  >
+                    <option value="">(없음)</option>
+                    {pending.cols.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              ))}
+              {!pending.map.courier ? (
+                <Field label="택배사 (파일에 없을 때)">
+                  <select
+                    value={pending.courier}
+                    onChange={(e) => setPending({ ...pending, courier: e.target.value })}
+                    className={inputClass + " py-2.5 text-[14px]"}
+                  >
+                    {COURIER_NAMES.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </Field>
+              ) : null}
+            </div>
+            <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-neutral-200 px-3.5 py-3">
+              <input
+                type="checkbox"
+                checked={!!pending.paidAll}
+                onChange={(e) => setPending({ ...pending, paidAll: e.target.checked })}
+                className="mt-0.5 h-4 w-4 accent-neutral-900"
+              />
+              <span className="text-[13.5px] leading-relaxed text-neutral-800">
+                <b>이 파일의 주문은 모두 결제가 끝났어요</b>
+                <span className="block text-[12.5px] text-neutral-500">
+                  카드·스마트스토어 결제처럼 이미 결제된 주문이면 켜 두세요. 계좌이체 입금을 아직 확인하지 않았다면 끄고, 나중에 체크해서
+                  &lsquo;결제 확인&rsquo;을 누르면 돼요.
+                </span>
+              </span>
+            </label>
+            <div className="mt-3 flex flex-wrap gap-1.5 text-[12px] font-bold">
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">새 주문 {parsed.add}</span>
+              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">바뀜(송장·결제) {parsed.upd}</span>
+              <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-600">그대로 {parsed.same}</span>
+              {parsed.bad ? (
+                <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">건너뜀 {parsed.bad} (이름·번호 없음)</span>
+              ) : null}
+            </div>
+            <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-neutral-100">
+              <table className="w-full text-left text-[13px]">
+                <thead className="sticky top-0 bg-neutral-50 text-[12px] text-neutral-500">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">받는 분</th>
+                    <th className="px-3 py-2 font-semibold">뒤 4자리</th>
+                    <th className="px-3 py-2 font-semibold">상품</th>
+                    <th className="px-3 py-2 font-semibold">송장</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsed.rows.slice(0, 8).map((r, i) => (
+                    <tr key={i} className="border-t border-neutral-100">
+                      <td className="whitespace-nowrap px-3 py-2">{r.name}</td>
+                      <td className="px-3 py-2">{r.p4}</td>
+                      <td className="max-w-[240px] truncate px-3 py-2">{r.item}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{r.inv ? r.courier + " " + r.inv : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={doImport}
+                disabled={busy || !pending.map.name || !pending.map.phone || !parsed.rows.length}
+                className="rounded-xl bg-emerald-600 px-5 py-3 text-[14px] font-bold text-white transition active:scale-95 disabled:opacity-40"
+              >
+                {busy ? "올리는 중…" : parsed.rows.length + "건 등록하기"}
+              </button>
+              <button type="button" onClick={() => setPending(null)} className={outlineBtn + " py-3"}>
+                취소
+              </button>
+              {!pending.map.name || !pending.map.phone ? (
+                <span className="text-[12.5px] font-medium text-rose-500">이름과 전화번호 칸은 꼭 골라 주세요</span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className={panelClass + " p-5"}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[17px] font-bold text-neutral-900">
+            주문 목록{" "}
+            <span className="text-[13px] font-medium text-neutral-500">
+              손님 {people}명 · 상품 {orders.length}개 · 결제 확인 전 {unpaid} · 송장 대기 {orders.filter((o) => !o.inv).length}
+            </span>
+          </h2>
+          <button
+            type="button"
+            onClick={() => setEdit({ id: "", name: "", p4: "", item: "", courier: COURIER_NAMES[0], inv: "", paid: true, shipDate: "" })}
+            className="flex items-center gap-1 rounded-lg bg-neutral-900 px-3 py-2 text-[13px] font-semibold text-white"
+          >
+            <Plus size={15} /> 직접 추가
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label className="relative min-w-[200px] flex-1">
+            <span className="sr-only">검색</span>
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <input
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPage(1);
+              }}
+              placeholder="이름, 뒤 4자리, 송장번호, 상품 검색"
+              className={inputClass + " py-2.5 pl-9 text-[14px]"}
+            />
+          </label>
+          <Segmented
+            value={filter}
+            onChange={(v) => {
+              setFilter(v);
+              setPage(1);
+            }}
+            options={[
+              { id: "all", label: "전체" },
+              { id: "unpaid", label: "결제 확인 전" },
+              { id: "ready", label: "발송 준비" },
+              { id: "sent", label: "송장 등록" },
+            ]}
+          />
+        </div>
+        {sel.length ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-neutral-900 px-4 py-3 text-white">
+            <span className="text-[13.5px] font-bold">
+              {selPeople}명 선택 <span className="font-normal text-white/60">(상품 {sel.length}개)</span>
+            </span>
+            <span className="flex-1" />
+            <button type="button" onClick={() => runBulk({ paid: true }, "결제 확인했어요")} className="rounded-lg bg-white px-3 py-2 text-[13px] font-semibold text-neutral-900">
+              결제 확인
+            </button>
+            <label className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1">
+              <span className="text-[12.5px]">발송 예정일</span>
+              <input type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} className="rounded-md bg-white px-2 py-1 text-[13px] text-neutral-900" />
+            </label>
+            <button
+              type="button"
+              disabled={!bulkDate}
+              onClick={() => runBulk({ paid: true, shipDate: bulkDate }, "발송 예정일을 " + prettyDate(bulkDate) + "로 정했어요")}
+              className="rounded-lg bg-emerald-500 px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+            >
+              예정일 저장
+            </button>
+            <button type="button" onClick={() => runBulk({ paid: false }, "결제 확인을 취소했어요")} className="rounded-lg px-2 py-2 text-[12.5px] text-white/80 underline underline-offset-2">
+              결제 취소
+            </button>
+            <button type="button" onClick={() => setConfirmDel({ ids: sel, people: selPeople })} className="rounded-lg bg-rose-500 px-3 py-2 text-[13px] font-semibold text-white">
+              삭제
+            </button>
+            <button type="button" onClick={() => setSel([])} className="px-2 py-2 text-[13px] text-white/70">
+              선택 취소
+            </button>
+          </div>
+        ) : (
+          <p className="mt-3 text-[12.5px] text-neutral-500">
+            한 손님이 여러 개를 사도 한 줄로 묶여요. 체크하면 그 손님 상품 전체에 &lsquo;결제 확인&rsquo;, &lsquo;발송 예정일&rsquo;이 한 번에 적용돼요.
+          </p>
+        )}
+        <div className="mt-3 overflow-x-auto rounded-xl border border-neutral-100">
+          <table className="w-full text-left text-[13.5px]">
+            <thead className="bg-neutral-50 text-[12px] text-neutral-500">
+              <tr>
+                <th className="w-10 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    aria-label="보이는 손님 모두 선택"
+                    checked={allOn}
+                    onChange={() => {
+                      const ids = shown.reduce((a, g) => a.concat(g.ids), []);
+                      setSel(allOn ? sel.filter((id) => !ids.includes(id)) : [...new Set([...sel, ...ids])]);
+                    }}
+                    className="h-4 w-4 accent-neutral-900"
+                  />
+                </th>
+                <th className="px-3 py-2.5 font-semibold">손님</th>
+                <th className="px-3 py-2.5 font-semibold">뒤 4자리</th>
+                <th className="px-3 py-2.5 font-semibold">상품</th>
+                <th className="px-3 py-2.5 font-semibold">상태</th>
+                <th className="px-3 py-2.5 font-semibold">발송 예정 · 송장</th>
+                <th className="px-3 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((g) => {
+                const on = g.ids.every((id) => sel.includes(id));
+                const isOpen = !!open[g.key];
+                const badge = orderBadge({ inv: g.step === 3 ? "x" : "", shipDate: g.step >= 2 ? "x" : "", paid: g.step >= 1 });
+                return (
+                  <React.Fragment key={g.key}>
+                    <tr className={"border-t border-neutral-100 " + (on ? "bg-neutral-50" : "")}>
+                      <td className="px-3 py-2.5">
+                        <input type="checkbox" aria-label={g.name + " 선택"} checked={on} onChange={() => toggleGroup(g)} className="h-4 w-4 accent-neutral-900" />
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-neutral-900">{g.name}</td>
+                      <td className="px-3 py-2.5">{g.p4}</td>
+                      <td className="max-w-[280px] px-3 py-2.5 text-neutral-700">
+                        {g.items.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => setOpen({ ...open, [g.key]: !isOpen })}
+                            aria-expanded={isOpen}
+                            className="flex max-w-full items-center gap-1 text-left"
+                          >
+                            <span className="truncate">{(g.items[0].item || "상품") + " 외 " + (g.items.length - 1) + "개"}</span>
+                            <ChevronDown size={15} className={"shrink-0 text-neutral-400 transition " + (isOpen ? "rotate-180" : "")} />
+                          </button>
+                        ) : (
+                          <span className="block truncate">{g.items[0].item || "-"}</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={"whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-bold " + badge.cls}>{badge.label}</span>
+                        {g.mixed ? <span className="ml-1.5 whitespace-nowrap text-[11.5px] text-neutral-400">일부 진행</span> : null}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-neutral-700">
+                        {g.invs.length > 1
+                          ? "나눠 보냄 · 송장 " + g.invs.length + "개"
+                          : g.invs.length === 1 && g.step === 3
+                          ? g.invs[0]
+                          : g.dates.length
+                          ? prettyDate(g.dates[0]) + " 예정"
+                          : g.invs.length
+                          ? "일부 송장 등록"
+                          : "-"}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex justify-end gap-1.5">
+                          <button type="button" onClick={() => setGroupEdit(g)} className={outlineBtn + " px-3 py-1.5"}>
+                            {g.step === 3 ? "수정" : "송장 넣기"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDel({ ids: g.ids, people: 1, name: g.name })}
+                            aria-label={g.name + " 주문 삭제"}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isOpen
+                      ? g.items.map((o) => (
+                          <tr key={o.id} className="bg-neutral-50/60 text-[13px]">
+                            <td />
+                            <td colSpan={2} className="px-3 py-2 text-right text-[12px] text-neutral-400">
+                              └ 상품별
+                            </td>
+                            <td className="max-w-[280px] truncate px-3 py-2 text-neutral-700">{o.item || "-"}</td>
+                            <td className="px-3 py-2">
+                              <span className={"whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-bold " + orderBadge(o).cls}>{orderBadge(o).label}</span>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 text-neutral-600">
+                              {o.inv ? o.courier + " · " + o.inv : o.shipDate ? prettyDate(o.shipDate) + " 예정" : "-"}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex justify-end gap-1.5">
+                                <button type="button" onClick={() => setEdit({ ...o, courier: o.courier || COURIER_NAMES[0] })} className={outlineBtn + " px-2.5 py-1 text-[12px]"}>
+                                  이 상품만 수정
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDel({ ids: [o.id], people: 0, name: o.name + " · " + (o.item || "") })}
+                                  aria-label={(o.item || "상품") + " 삭제"}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-400 hover:bg-rose-50 hover:text-rose-600"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      : null}
+                  </React.Fragment>
+                );
+              })}
+              {!shown.length ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-10 text-center text-[13.5px] text-neutral-400">
+                    {orders.length ? "검색 결과가 없어요" : "아직 주문이 없어요. 위에서 엑셀을 올리거나 직접 추가해 보세요"}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+        {pages > 1 ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[12.5px] text-neutral-500">
+              손님 {groups.length}명 중 {(curPage - 1) * ORDER_PAGE + 1}–{Math.min(curPage * ORDER_PAGE, groups.length)}
+            </p>
+            <Pager page={curPage} pages={pages} onPage={setPage} />
+          </div>
+        ) : null}
+        <p className="mt-2 text-[12px] text-neutral-400">
+          나눠 보낼 때는 상품명 옆 화살표를 눌러 &lsquo;이 상품만 수정&rsquo;으로 송장을 따로 넣어요. 주문 기록은 개인정보 보호를 위해 올린 지 90일이 지나면 자동으로 지워져요.
+        </p>
+      </section>
+
+      {groupEdit ? (
+        <GroupShipModal
+          group={groupEdit}
+          onClose={() => setGroupEdit(null)}
+          onSave={async (patch) => {
+            const ok = await onBulk(groupEdit.ids, patch);
+            if (ok) {
+              setGroupEdit(null);
+              showToast(groupEdit.name + "님 주문 " + groupEdit.ids.length + "개에 저장했어요");
+            }
+          }}
+        />
+      ) : null}
+
+      {edit ? (
+        <OrderEditModal
+          order={edit}
+          onClose={() => setEdit(null)}
+          onSave={async (o) => {
+            const ok = await onSave(o);
+            if (ok) {
+              setEdit(null);
+              showToast("저장했어요");
+            }
+          }}
+        />
+      ) : null}
+      {confirmDel ? (
+        <Modal
+          title={confirmDel.people > 1 ? confirmDel.people + "명의 주문을 지울까요?" : "이 주문을 지울까요?"}
+          desc={(confirmDel.name ? confirmDel.name + " · " : "") + "상품 " + confirmDel.ids.length + "개"}
+          onClose={() => setConfirmDel(null)}
+          footer={
+            <>
+              <button type="button" onClick={() => setConfirmDel(null)} className={outlineBtn + " flex-1 py-3"}>
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const ids = confirmDel.ids;
+                  setConfirmDel(null);
+                  const ok = await onDelete(ids);
+                  if (ok) {
+                    showToast("상품 " + ids.length + "개를 지웠어요");
+                    setSel((p) => p.filter((x) => !ids.includes(x)));
+                  }
+                }}
+                className="flex-1 rounded-lg bg-rose-600 py-3 text-[14px] font-bold text-white"
+              >
+                지우기
+              </button>
+            </>
+          }
+        >
+          <p className="text-[13.5px] text-neutral-600">손님이 더 이상 조회할 수 없어요. 공구가 끝나면 한꺼번에 지워도 돼요.</p>
+        </Modal>
+      ) : null}
+    </div>
+  );
+}
+
+// 한 손님의 상품 전체에 결제·예정일·송장을 한 번에 넣어요. (상자 하나로 같이 보낼 때)
+function GroupShipModal({ group, onClose, onSave }) {
+  const first = group.items.find((o) => o.inv) || group.items[0];
+  const [paid, setPaid] = useState(group.items.every((o) => o.paid) || group.step >= 1);
+  const [shipDate, setShipDate] = useState(group.dates[0] || "");
+  const [courier, setCourier] = useState(first.courier || COURIER_NAMES[0]);
+  const [inv, setInv] = useState(group.invs.length === 1 ? first.inv : "");
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    const clean = String(inv || "").replace(/[^0-9A-Za-z]/g, "");
+    const patch = { paid: paid || !!clean, shipDate };
+    if (clean) {
+      patch.inv = clean;
+      patch.courier = courier;
+    }
+    await onSave(patch);
+    setBusy(false);
+  };
+  return (
+    <Modal
+      title={group.name + "님 주문"}
+      desc={"상품 " + group.items.length + "개 · 뒤 4자리 " + group.p4}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={outlineBtn + " flex-1 py-3"}>
+            닫기
+          </button>
+          <button type="button" onClick={save} disabled={busy} className="flex-[2] rounded-lg bg-neutral-900 py-3 text-[14px] font-bold text-white disabled:opacity-60">
+            {busy ? "저장 중…" : "상품 " + group.items.length + "개에 저장"}
+          </button>
+        </>
+      }
+    >
+      <ul className="space-y-1 rounded-xl bg-neutral-50 px-3.5 py-3 text-[13.5px] text-neutral-700">
+        {group.items.map((o) => (
+          <li key={o.id} className="flex items-center justify-between gap-2">
+            <span className="truncate">{o.item || "상품"}</span>
+            <span className={"shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-bold " + orderBadge(o).cls}>{orderBadge(o).label}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="grid grid-cols-2 gap-2.5">
+        <Field label="결제">
+          <button
+            type="button"
+            onClick={() => setPaid(!paid)}
+            aria-pressed={paid}
+            className={
+              "flex w-full items-center justify-center gap-1.5 rounded-xl border px-3.5 py-3 text-[14px] font-semibold " +
+              (paid ? "border-blue-600 bg-blue-50 text-blue-700" : "border-neutral-200 bg-white text-neutral-500")
+            }
+          >
+            {paid ? (
+              <>
+                <Check size={15} /> 결제 확인됨
+              </>
+            ) : (
+              "결제 확인 전"
+            )}
+          </button>
+        </Field>
+        <Field label="발송 예정일 (선택)">
+          <input type="date" value={shipDate} onChange={(e) => setShipDate(e.target.value)} className={inputClass} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-[1fr_1.4fr] gap-2.5">
+        <Field label="택배사">
+          <select value={courier} onChange={(e) => setCourier(e.target.value)} className={inputClass}>
+            {COURIER_NAMES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="송장번호" hint="상자 하나로 같이 보냈다면 여기 한 번만">
+          <input value={inv} onChange={(e) => setInv(e.target.value.slice(0, 40))} inputMode="numeric" className={inputClass} />
+        </Field>
+      </div>
+      {group.invs.length > 1 ? (
+        <p className="text-[12.5px] text-amber-700">이미 상품별로 송장이 따로 들어가 있어요. 여기에 적으면 모든 상품이 같은 송장으로 바뀌어요.</p>
+      ) : null}
+    </Modal>
+  );
+}
+
+function OrderEditModal({ order, onClose, onSave }) {
+  const [d, setD] = useState(order);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setD((p) => ({ ...p, [k]: v }));
+  const save = async () => {
+    if (!d.name.trim()) return setErr("받는 분 이름을 적어 주세요");
+    if (!/^\d{4}$/.test(d.p4)) return setErr("전화번호 뒤 4자리를 숫자로 적어 주세요");
+    setErr("");
+    setBusy(true);
+    const inv = String(d.inv || "").replace(/[^0-9A-Za-z]/g, "");
+    await onSave({ ...d, name: d.name.trim(), item: (d.item || "").trim(), inv, courier: inv ? d.courier : "", paid: !!d.paid || !!inv, shipDate: d.shipDate || "" });
+    setBusy(false);
+  };
+  return (
+    <Modal
+      title={order.id ? "주문 수정" : "주문 직접 추가"}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className={outlineBtn + " flex-1 py-3"}>
+            닫기
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={busy}
+            className="flex-[2] rounded-lg bg-neutral-900 py-3 text-[14px] font-bold text-white disabled:opacity-60"
+          >
+            {busy ? "저장 중…" : "저장"}
+          </button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-2.5">
+        <Field label="받는 분">
+          <input value={d.name} onChange={(e) => set("name", e.target.value.slice(0, 40))} className={inputClass} />
+        </Field>
+        <Field label="전화번호 뒤 4자리">
+          <input value={d.p4} onChange={(e) => set("p4", onlyDigits(e.target.value).slice(0, 4))} inputMode="numeric" className={inputClass} />
+        </Field>
+      </div>
+      <Field label="상품명">
+        <input value={d.item} onChange={(e) => set("item", e.target.value.slice(0, 200))} className={inputClass} />
+      </Field>
+      <div className="grid grid-cols-2 gap-2.5">
+        <Field label="결제">
+          <button
+            type="button"
+            onClick={() => set("paid", !d.paid)}
+            aria-pressed={!!d.paid}
+            className={
+              "flex w-full items-center justify-center gap-1.5 rounded-xl border px-3.5 py-3 text-[14px] font-semibold " +
+              (d.paid ? "border-blue-600 bg-blue-50 text-blue-700" : "border-neutral-200 bg-white text-neutral-500")
+            }
+          >
+            {d.paid ? (
+              <>
+                <Check size={15} /> 결제 확인됨
+              </>
+            ) : (
+              "결제 확인 전"
+            )}
+          </button>
+        </Field>
+        <Field label="발송 예정일 (선택)">
+          <input type="date" value={d.shipDate || ""} onChange={(e) => set("shipDate", e.target.value)} className={inputClass} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-[1fr_1.4fr] gap-2.5">
+        <Field label="택배사">
+          <select value={d.courier} onChange={(e) => set("courier", e.target.value)} className={inputClass}>
+            {COURIER_NAMES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="송장번호" hint="송장이 나오면 적어 주세요">
+          <input value={d.inv} onChange={(e) => set("inv", e.target.value.slice(0, 40))} inputMode="numeric" className={inputClass} />
+        </Field>
+      </div>
+      {err ? <p className="text-[13px] font-medium text-rose-500">{err}</p> : null}
+    </Modal>
+  );
+}
+
+/* ---------- 사장님: 1:1 문의 ---------- */
+
+function AsksPanel({ asks, onAnswer, onDelete, showToast }) {
+  const [drafts, setDrafts] = useState({});
+  const [show, setShow] = useState("open");
+  const open = asks.filter((a) => !a.answer);
+  const list = show === "open" ? open : asks;
+  return (
+    <section className={panelClass + " p-5"}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[17px] font-bold text-neutral-900">1:1 문의</h2>
+        <Segmented
+          value={show}
+          onChange={setShow}
+          options={[
+            { id: "open", label: "답변 대기 " + open.length },
+            { id: "all", label: "전체 " + asks.length },
+          ]}
+        />
+      </div>
+      <div className="mt-4 space-y-3">
+        {list.map((a) => {
+          const draft = drafts[a.id] != null ? drafts[a.id] : a.answer;
+          return (
+            <div key={a.id} className={"rounded-xl border p-4 " + (a.answer ? "border-neutral-200" : "border-neutral-900")}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[14px]">
+                  <b className="text-neutral-900">{a.name}</b>
+                  <span className="text-[12.5px] text-neutral-500"> · {a.p4} · {shortDate(a.created_at)}</span>
+                </p>
+                <span
+                  className={
+                    "rounded-full px-2.5 py-1 text-[12px] font-bold " +
+                    (a.answer ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")
+                  }
+                >
+                  {a.answer ? "답변 완료" : "답변 대기"}
+                </span>
+              </div>
+              <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-neutral-800">{a.message}</p>
+              <label className="mt-3 block">
+                <span className="sr-only">답변</span>
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDrafts({ ...drafts, [a.id]: e.target.value.slice(0, 1000) })}
+                  rows={2}
+                  placeholder="답변을 적으면 손님이 링크에서 확인해요"
+                  className={inputClass + " resize-none text-[14px]"}
+                />
+              </label>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!String(draft || "").trim()}
+                  onClick={async () => {
+                    const ok = await onAnswer(a.id, String(draft).trim());
+                    if (ok) showToast("답변을 저장했어요. 손님이 조회하면 보여요");
+                  }}
+                  className="rounded-lg bg-neutral-900 px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+                >
+                  {a.answer ? "답변 수정" : "답변 보내기"}
+                </button>
+                <span className="flex-1" />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await onDelete(a.id);
+                    if (ok) showToast("문의를 지웠어요");
+                  }}
+                  className="text-[12.5px] font-medium text-neutral-400 hover:text-rose-600"
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {!list.length ? (
+          <p className="py-10 text-center text-[13.5px] text-neutral-400">
+            {asks.length ? "답변을 기다리는 문의가 없어요" : "아직 들어온 문의가 없어요"}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+const CS_TABS = [
+  { id: "ship", label: "주문 조회", icon: <Package size={20} /> },
+  { id: "return", label: "교환·반품", icon: <ArrowLeftRight size={20} /> },
+  { id: "faq", label: "자주 묻는 질문", icon: <Lightbulb size={20} /> },
+  { id: "ask", label: "1:1 문의", icon: <MessageCircle size={20} /> },
+];
+
+export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdmin, onMetric, showTracking = true, cs }) {
   const [lookup, setLookup] = useState(null);
   const [panel, setPanel] = useState("");
+  const [tab, setTab] = useState(cs && settings.orderLookup ? "ship" : "return");
   const lookupRef = useRef(null);
 
   const track = (name, phone4) => {
+    setTab("return");
     setPanel("lookup");
     setLookup({ name, phone4, at: Date.now() });
     setTimeout(() => {
@@ -2344,13 +3755,12 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
     }, 50);
   };
 
-  return (
-    <div className="mx-auto w-full max-w-md space-y-4 px-4 pb-10 pt-4">
-      <BrandHeader settings={settings} />
-      <div className={"grid gap-2 " + (showTracking ? "grid-cols-2" : "grid-cols-1")}>
+  const returnPart = (
+    <>
+      <div className={"grid gap-2 " + (showTracking && !cs ? "grid-cols-2" : "grid-cols-1")}>
         {[
-          { id: "lookup", icon: <Search size={15} />, label: "내 접수 진행 상황" },
-          ...(showTracking ? [{ id: "track", icon: <Truck size={15} />, label: "택배 배송 조회" }] : []),
+          { id: "lookup", icon: <Search size={15} />, label: "내 교환·반품 진행 상황" },
+          ...(showTracking && !cs ? [{ id: "track", icon: <Truck size={15} />, label: "택배 배송 조회" }] : []),
         ].map((b) => (
           <button
             key={b.id}
@@ -2366,7 +3776,7 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
           </button>
         ))}
       </div>
-      {panel === "track" && showTracking ? (
+      {panel === "track" && showTracking && !cs ? (
         <div className="animate-fade-up">
           <TrackingCard onTracked={() => onMetric("track")} />
         </div>
@@ -2384,24 +3794,72 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
         </div>
       ) : null}
       <RequestForm settings={settings} onSubmit={onSubmit} showToast={showToast} onTrack={track} />
-      <FaqCard faqs={settings.faqs} />
+    </>
+  );
 
-      {validKakaoUrl(settings.kakaoUrl) ? (
-      <div className="pt-1">
-        <p className="mb-2 text-center text-[12px] text-neutral-500">
-          여기서 해결이 안 됐다면 편하게 물어봐 주세요
-        </p>
-        <a
-          href={normalizeKakaoUrl(settings.kakaoUrl)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] py-4 text-[15px] font-bold text-[#191919] shadow-card transition active:scale-[0.98]"
-        >
-          <MessageCircle size={18} fill="#191919" />
-          카카오톡 1:1 상담 바로가기
-        </a>
-      </div>
-      ) : null}
+  const kakaoPart = validKakaoUrl(settings.kakaoUrl) ? (
+    <div className="pt-1">
+      <p className="mb-2 text-center text-[12px] text-neutral-500">여기서 해결이 안 됐다면 편하게 물어봐 주세요</p>
+      <a
+        href={normalizeKakaoUrl(settings.kakaoUrl)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] py-4 text-[15px] font-bold text-[#191919] shadow-card transition active:scale-[0.98]"
+      >
+        <MessageCircle size={18} fill="#191919" />
+        카카오톡 1:1 상담 바로가기
+      </a>
+    </div>
+  ) : null;
+
+  return (
+    <div className="mx-auto w-full max-w-md space-y-4 px-4 pb-10 pt-4">
+      <BrandHeader settings={settings} />
+      {cs ? (
+        <>
+          <div className="grid grid-cols-4 gap-1.5" role="tablist" aria-label="메뉴">
+            {CS_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                onClick={() => setTab(t.id)}
+                className={
+                  "flex min-h-[74px] flex-col items-center justify-center gap-1.5 rounded-xl border bg-white px-1 text-[12.5px] font-semibold transition " +
+                  (tab === t.id ? "border-2 border-neutral-900 text-neutral-900" : "border-neutral-200 text-neutral-500")
+                }
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div key={tab} className="animate-fade-up space-y-4">
+            {tab === "ship" ? (
+              <ShipLookup cs={cs} settings={settings} onMetric={onMetric} showToast={showToast} onGoReturn={() => setTab("return")} />
+            ) : tab === "return" ? (
+              returnPart
+            ) : tab === "faq" ? (
+              settings.faqs.length ? (
+                <FaqCard faqs={settings.faqs} />
+              ) : (
+                <CustomerCard>
+                  <p className="py-6 text-center text-[13.5px] text-neutral-400">아직 등록된 질문이 없어요.</p>
+                </CustomerCard>
+              )
+            ) : (
+              <AskCard cs={cs} settings={settings} showToast={showToast} />
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          {returnPart}
+          <FaqCard faqs={settings.faqs} />
+          {kakaoPart}
+        </>
+      )}
 
       <footer className="pt-4 text-center">
         <button
@@ -2409,7 +3867,7 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
           onClick={goAdmin || (() => (window.location.href = "/"))}
           className="inline-flex flex-wrap items-center justify-center gap-1 text-[13px] font-semibold text-neutral-700 underline-offset-2 hover:underline"
         >
-          Powered by <RLWord /> · 나도 1분 만에 반품 포털 만들기
+          Powered by <RLWord /> · 나도 1분 만에 CS 센터 만들기
           <ArrowRight size={13} />
         </button>
       </footer>
@@ -5519,8 +6977,24 @@ export function AdminView({
   onWithdraw,
   trialEndsAt,
   showToast,
+  orders,
+  asks,
+  onImportOrders,
+  onSaveOrder,
+  onDeleteOrders,
+  onBulkOrders,
+  onAnswerAsk,
+  onDeleteAsk,
 }) {
   const [settingsTab, setSettingsTab] = useState("");
+  const [section, setSection] = useState("returns");
+  const hasCs = !!onImportOrders;
+  const returnTodo = requests.filter((r) => {
+    const st = statusOf(r);
+    return st === "waiting" || st === "progress" || st === "arrived";
+  }).length;
+  const shipWait = hasCs ? orders.filter((o) => !o.inv).length : 0;
+  const askOpen = hasCs ? asks.filter((a) => !a.answer).length : 0;
   const [detail, setDetail] = useState(null);
 
   const closeSettings = useCallback(() => setSettingsTab(""), []);
@@ -5607,6 +7081,44 @@ export function AdminView({
             <span className="shrink-0 text-[13px] font-bold text-neutral-900">넣기 →</span>
           </button>
         ) : null}
+        {hasCs ? (
+          <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="관리 메뉴">
+            {[
+              { id: "returns", label: "교환·반품", n: returnTodo, tone: "bg-red-500" },
+              { id: "orders", label: "주문·발송", n: shipWait, tone: "bg-orange-500" },
+              { id: "asks", label: "1:1 문의", n: askOpen, tone: "bg-red-500" },
+            ].map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={section === t.id}
+                onClick={() => setSection(t.id)}
+                className={
+                  "flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-[14px] font-semibold transition " +
+                  (section === t.id ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white text-neutral-700")
+                }
+              >
+                {t.label}
+                {t.n ? <span className={"rounded-full px-1.5 py-0.5 text-[11px] leading-none text-white " + t.tone}>{t.n}</span> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {hasCs && section === "orders" ? (
+          <OrdersPanel
+            orders={orders}
+            onImport={onImportOrders}
+            onSave={onSaveOrder}
+            onDelete={onDeleteOrders}
+            onBulk={onBulkOrders}
+            settings={settings}
+            onSaveSettings={onSaveSettings}
+            showToast={showToast}
+          />
+        ) : hasCs && section === "asks" ? (
+          <AsksPanel asks={asks} onAnswer={onAnswerAsk} onDelete={onDeleteAsk} showToast={showToast} />
+        ) : (
         <Dashboard
           settings={settings}
           requests={requests}
@@ -5618,6 +7130,7 @@ export function AdminView({
           openSettings={(t) => setSettingsTab(t)}
           onFeedback={onFeedback}
         />
+        )}
       </div>
 
       {current ? (
@@ -5685,9 +7198,11 @@ export function useToast() {
 
 export default function ReturnLinkApp({ initialView = "landing", demo = false }) {
   const [view, setView] = useState(initialView);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState(DEMO_SETTINGS);
   const [requests, setRequests] = useState(() => purgeOld(INITIAL_REQUESTS));
   const [metrics, setMetrics] = useState(DEFAULT_METRICS);
+  const [orders, setOrders] = useState(DEMO_ORDERS);
+  const [asks, setAsks] = useState(DEMO_ASKS);
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
@@ -5703,6 +7218,10 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
           setSettings({ ...DEFAULT_SETTINGS, ...data.settings });
           setRequests(purgeOld(data.requests));
           setMetrics(data.metrics && typeof data.metrics === "object" ? data.metrics : DEFAULT_METRICS);
+          if (data.ordersVersion === DEMO_ORDERS_VERSION) {
+            if (Array.isArray(data.orders)) setOrders(data.orders);
+            if (Array.isArray(data.asks)) setAsks(data.asks);
+          }
         }
       } catch (e) {
         /* 깨진 데이터는 무시 */
@@ -5728,7 +7247,7 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
   // 바뀔 때마다 저장
   useEffect(() => {
     if (!loaded) return;
-    const raw = JSON.stringify({ settings, requests, metrics });
+    const raw = JSON.stringify({ settings, requests, metrics, orders, asks, ordersVersion: DEMO_ORDERS_VERSION });
     if (raw === lastSaved.current) return;
     lastSaved.current = raw;
     try {
@@ -5736,7 +7255,7 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
     } catch (e) {
       /* 사진이 너무 많아 저장 공간이 부족하면 화면에서만 유지돼요 */
     }
-  }, [settings, requests, metrics, loaded]);
+  }, [settings, requests, metrics, orders, asks, loaded]);
 
   useEffect(() => {
     return () => {
@@ -5783,9 +7302,43 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
     setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   const resetDemo = () => {
-    setSettings(DEFAULT_SETTINGS);
+    setSettings(DEMO_SETTINGS);
     setRequests(purgeOld(INITIAL_REQUESTS));
     setMetrics(DEFAULT_METRICS);
+    setOrders(DEMO_ORDERS);
+    setAsks(DEMO_ASKS);
+  };
+
+  // 데모용 주문·송장·문의 (이 기기에만 저장)
+  const sameName = (a, b) => String(a).replace(/\s/g, "") === String(b).replace(/\s/g, "");
+  const demoCs = {
+    lookupOrders: async (name, p4) =>
+      orders
+        .filter((o) => sameName(o.name, name) && o.p4 === p4)
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
+    submitAsk: async (name, p4, message) => {
+      setAsks((prev) => [{ id: "a-" + Date.now(), name, p4, message, answer: "", created_at: new Date().toISOString() }, ...prev]);
+      return true;
+    },
+    lookupAsks: async (name, p4) => asks.filter((a) => a.name === name && a.p4 === p4),
+  };
+  const demoImport = async (items) => {
+    setOrders((prev) => {
+      const byId = new Map(items.filter((o) => o.id).map((o) => [o.id, o]));
+      const fresh = items
+        .filter((o) => !o.id)
+        .map((o, i) => {
+          const { _key, ...rest } = o;
+          return { ...rest, id: "o-" + Date.now() + "-" + i, created_at: new Date().toISOString() };
+        });
+      return [...fresh, ...prev.map((o) => (byId.has(o.id) ? { ...o, ...byId.get(o.id) } : o))];
+    });
+    return true;
+  };
+  const demoSaveOrder = async (o) => {
+    if (o.id) setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, ...o } : x)));
+    else setOrders((prev) => [{ ...o, id: "o-" + Date.now(), created_at: new Date().toISOString() }, ...prev]);
+    return true;
   };
 
   // 가입을 마치면 새 마켓으로 시작해요. (데모: 예시 데이터 대신 빈 기록지)
@@ -5865,7 +7418,8 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
           <SignupFlow onFinish={finishSignup} onGo={switchView} showToast={showToast} />
         ) : view === "customer" ? (
           <CustomerView
-            settings={settings}
+            settings={{ ...settings, orderLookup: true }}
+            cs={demoCs}
             fetchLookup={demoLookup}
             onSubmit={addRequest}
             onMetric={bumpMetric}
@@ -5884,6 +7438,26 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
             onDelete={deleteRequests}
             onSaveSettings={setSettings}
             onReset={resetDemo}
+            orders={orders}
+            asks={asks}
+            onImportOrders={demoImport}
+            onSaveOrder={demoSaveOrder}
+            onDeleteOrders={async (ids) => {
+              setOrders((prev) => prev.filter((o) => !ids.includes(o.id)));
+              return true;
+            }}
+            onBulkOrders={async (ids, patch) => {
+              setOrders((prev) => prev.map((o) => (ids.includes(o.id) ? { ...o, ...patch } : o)));
+              return true;
+            }}
+            onAnswerAsk={async (id, answer) => {
+              setAsks((prev) => prev.map((a) => (a.id === id ? { ...a, answer } : a)));
+              return true;
+            }}
+            onDeleteAsk={async (id) => {
+              setAsks((prev) => prev.filter((a) => a.id !== id));
+              return true;
+            }}
             onWithdraw={() => {
               resetDemo();
               switchView("landing");

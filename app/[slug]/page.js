@@ -3,7 +3,7 @@ import { ShopPage } from "../../components/pages";
 // 링크를 카톡·인스타로 공유할 때 "오트 스튜디오 | 교환·반품 접수"처럼 마켓 이름이 보이게 해요.
 export async function generateMetadata({ params }) {
   const handle = decodeURIComponent((params && params.slug) || "").replace(/^@/, "").toLowerCase();
-  const fallback = { title: "교환·반품 접수 | ReturnLink" };
+  const fallback = { title: "주문 조회·교환·반품 | ReturnLink" };
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key || !handle) return fallback;
@@ -19,8 +19,8 @@ export async function generateMetadata({ params }) {
     const name = shop && shop.settings && shop.settings.marketName;
     if (!name) return fallback;
     const intro = (shop.settings.intro || "").replace(/\s+/g, " ").trim();
-    const title = name + " | 교환·반품 접수";
-    const description = intro || "카톡 기다릴 필요 없이 여기서 바로 교환·반품을 접수해요.";
+    const title = name + " | 주문 조회·교환·반품";
+    const description = intro || "카톡 기다릴 필요 없이 배송 조회와 교환·반품을 여기서 바로 해결해요.";
     return {
       title,
       description,

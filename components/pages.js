@@ -1,12 +1,41 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase, rowToRequest, requestToData, ONLINE_CHANNEL } from "../lib/supabase";
 import { AdminView, CustomerView, Landing, SignupFlow, Toast, useToast } from "./ReturnLinkApp";
 
 const TRACKING_ON = process.env.NEXT_PUBLIC_TRACKING === "on";
 const KEEP_DAYS = 90;
+
+// DB 주문 한 줄을 화면용으로 바꿔요.
+function rowToOrder(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    p4: r.phone4,
+    item: r.item || "",
+    courier: r.courier || "",
+    inv: r.invoice || "",
+    paid: !!r.paid,
+    shipDate: r.ship_date || "",
+    created_at: r.created_at,
+  };
+}
+
+function makeId() {
+  try {
+    if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+  } catch (e) {
+    /* 아래로 */
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+
 
 function daysSince(dateStr) {
   const m = /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(dateStr || "");
@@ -216,9 +245,15 @@ export function AdminPage() {
   const [shop, setShop] = useState(null);
   useOnline(shop ? "admin" : "", shop ? shop.handle : "");
   const [requests, setRequests] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [asks, setAsks] = useState([]);
   const [loading, setLoading] = useState(true);
   const requestsRef = useRef([]);
   requestsRef.current = requests;
+  const ordersRef = useRef([]);
+  ordersRef.current = orders;
+  const shopRef = useRef(null);
+  shopRef.current = shop;
 
   const loadRequests = useCallback(async (shopId) => {
     const { data, error } = await supabase
@@ -268,6 +303,20 @@ export function AdminPage() {
       } catch (e) {
         if (alive) showToast("접수 목록을 불러오지 못했어요. 새로고침해 주세요", "warn");
       }
+      // 주문·송장과 1:1 문의 (cs.sql 을 실행하지 않았으면 조용히 건너뛰어요)
+      try {
+        const cutoff = new Date(Date.now() - KEEP_DAYS * 86400000).toISOString();
+        await supabase.from("orders").delete().eq("shop_id", s.id).lt("created_at", cutoff);
+        await supabase.from("asks").delete().eq("shop_id", s.id).lt("created_at", cutoff);
+        const [o, a] = await Promise.all([
+          supabase.from("orders").select("*").eq("shop_id", s.id).order("created_at", { ascending: false }).limit(5000),
+          supabase.from("asks").select("*").eq("shop_id", s.id).order("created_at", { ascending: false }).limit(500),
+        ]);
+        if (alive && !o.error) setOrders((o.data || []).map(rowToOrder));
+        if (alive && !a.error) setAsks((a.data || []).map((x) => ({ ...x, p4: x.phone4 })));
+      } catch (e) {
+        /* 무시 */
+      }
       if (alive) setLoading(false);
 
       // 새 접수가 들어오면 바로 목록에 넣어요.
@@ -290,6 +339,15 @@ export function AdminPage() {
               });
             }
             showToast("새 " + (r.type === "exchange" ? "교환" : "반품") + " 접수가 들어왔어요 · " + r.name + "님");
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "asks", filter: "shop_id=eq." + s.id },
+          (payload) => {
+            const a = { ...payload.new, p4: payload.new.phone4 };
+            setAsks((prev) => (prev.some((x) => x.id === a.id) ? prev : [a, ...prev]));
+            showToast("새 1:1 문의가 들어왔어요 · " + a.name + "님");
           }
         )
         .subscribe();
@@ -356,6 +414,156 @@ export function AdminPage() {
     return true;
   }, [routerRef, showToast]);
 
+  // ----- 주문·송장 -----
+  const onImportOrders = useCallback(
+    async (items) => {
+      const s = shopRef.current;
+      if (!s) return false;
+      const now = new Date().toISOString();
+      const rows = items.map((o) => ({ ...o, id: o.id || makeId() }));
+      const payload = rows.map((o) => ({
+        id: o.id,
+        shop_id: s.id,
+        name: o.name,
+        phone4: o.p4,
+        item: o.item || "",
+        courier: o.courier || "",
+        invoice: o.inv || "",
+        paid: !!o.paid,
+        ship_date: o.shipDate || null,
+        sent_at: o.inv ? now : null,
+      }));
+      for (let i = 0; i < payload.length; i += 500) {
+        const { error } = await supabase.from("orders").upsert(payload.slice(i, i + 500));
+        if (error) {
+          showToast(
+            error.code === "42P01" ? "주문 기능 준비가 안 됐어요. Supabase 에서 cs.sql 을 실행해 주세요" : "올리기가 안 됐어요. 다시 시도해 주세요",
+            "warn"
+          );
+          return false;
+        }
+      }
+      const byId = new Map(rows.map((o) => [o.id, o]));
+      setOrders((prev) => {
+        const known = new Set(prev.map((o) => o.id));
+        const fresh = rows
+          .filter((o) => !known.has(o.id))
+          .map((o) => {
+            const { _key, ...rest } = o;
+            return { ...rest, created_at: now };
+          });
+        return [...fresh, ...prev.map((o) => (byId.has(o.id) ? { ...o, ...byId.get(o.id) } : o))];
+      });
+      // 처음 올리면 손님 화면이 '주문 조회'부터 보이게 켜요.
+      if (!(s.settings && s.settings.orderLookup)) {
+        const next = { ...s.settings, orderLookup: true };
+        setShop({ ...s, settings: next });
+        supabase.from("shops").update({ settings: next }).eq("id", s.id).then(() => {});
+      }
+      return true;
+    },
+    [showToast]
+  );
+
+  const onSaveOrder = useCallback(
+    async (o) => {
+      const s = shopRef.current;
+      const before = o.id ? ordersRef.current.find((x) => x.id === o.id) : null;
+      const row = {
+        id: o.id || makeId(),
+        shop_id: s.id,
+        name: o.name,
+        phone4: o.p4,
+        item: o.item || "",
+        courier: o.courier || "",
+        invoice: o.inv || "",
+        paid: !!o.paid,
+        ship_date: o.shipDate || null,
+        sent_at: o.inv ? (before && before.inv === o.inv ? undefined : new Date().toISOString()) : null,
+      };
+      if (row.sent_at === undefined) delete row.sent_at;
+      const { error } = await supabase.from("orders").upsert(row);
+      if (error) {
+        showToast("저장이 안 됐어요. 다시 시도해 주세요", "warn");
+        return false;
+      }
+      const view = {
+        id: row.id,
+        name: row.name,
+        p4: row.phone4,
+        item: row.item,
+        courier: row.courier,
+        inv: row.invoice,
+        paid: row.paid,
+        shipDate: o.shipDate || "",
+        created_at: before ? before.created_at : new Date().toISOString(),
+      };
+      setOrders((prev) => (before ? prev.map((x) => (x.id === row.id ? view : x)) : [view, ...prev]));
+      return true;
+    },
+    [showToast]
+  );
+
+  const onDeleteOrders = useCallback(
+    async (ids) => {
+      const { error } = await supabase.from("orders").delete().in("id", ids);
+      if (error) {
+        showToast("삭제가 안 됐어요. 다시 시도해 주세요", "warn");
+        return false;
+      }
+      setOrders((prev) => prev.filter((o) => !ids.includes(o.id)));
+      return true;
+    },
+    [showToast]
+  );
+
+  const onBulkOrders = useCallback(
+    async (ids, patch) => {
+      const dbPatch = {};
+      if ("paid" in patch) dbPatch.paid = !!patch.paid;
+      if ("shipDate" in patch) dbPatch.ship_date = patch.shipDate || null;
+      if ("inv" in patch) {
+        dbPatch.invoice = patch.inv || "";
+        dbPatch.courier = patch.inv ? patch.courier || "" : "";
+        dbPatch.sent_at = patch.inv ? new Date().toISOString() : null;
+      }
+      const { error } = await supabase.from("orders").update(dbPatch).in("id", ids);
+      if (error) {
+        showToast("저장이 안 됐어요. 다시 시도해 주세요", "warn");
+        return false;
+      }
+      setOrders((prev) => prev.map((o) => (ids.includes(o.id) ? { ...o, ...patch } : o)));
+      return true;
+    },
+    [showToast]
+  );
+
+  // ----- 1:1 문의 -----
+  const onAnswerAsk = useCallback(
+    async (id, answer) => {
+      const { error } = await supabase.from("asks").update({ answer, answered_at: new Date().toISOString() }).eq("id", id);
+      if (error) {
+        showToast("저장이 안 됐어요. 다시 시도해 주세요", "warn");
+        return false;
+      }
+      setAsks((prev) => prev.map((a) => (a.id === id ? { ...a, answer } : a)));
+      return true;
+    },
+    [showToast]
+  );
+  const onDeleteAsk = useCallback(
+    async (id) => {
+      const { error } = await supabase.from("asks").delete().eq("id", id);
+      if (error) {
+        showToast("삭제가 안 됐어요. 다시 시도해 주세요", "warn");
+        return false;
+      }
+      setAsks((prev) => prev.filter((a) => a.id !== id));
+      return true;
+    },
+    [showToast]
+  );
+
   const onFeedback = useCallback(async (message) => {
     const { error } = await supabase.rpc("submit_feedback", { p_message: message });
     return !error;
@@ -381,6 +589,14 @@ export function AdminPage() {
         onReset={onLogout}
         onLogout={onLogout}
         onFeedback={onFeedback}
+        orders={orders}
+        asks={asks}
+        onImportOrders={onImportOrders}
+        onSaveOrder={onSaveOrder}
+        onDeleteOrders={onDeleteOrders}
+        onBulkOrders={onBulkOrders}
+        onAnswerAsk={onAnswerAsk}
+        onDeleteAsk={onDeleteAsk}
         resetLabel="로그아웃"
         onWithdraw={onWithdraw}
         showToast={showToast}
@@ -430,7 +646,7 @@ export function ShopPage() {
 
   useEffect(() => {
     if (state.settings && state.settings.marketName) {
-      document.title = state.settings.marketName + " | 교환·반품 접수";
+      document.title = state.settings.marketName + " | 주문 조회·교환·반품";
     }
   }, [state.settings]);
 
@@ -466,6 +682,36 @@ export function ShopPage() {
     [handle]
   );
 
+  const cs = useMemo(
+    () => ({
+      lookupOrders: async (name, phone4) => {
+        const { data, error } = await supabase.rpc("lookup_orders", { p_handle: handle, p_name: name, p_phone4: phone4 });
+        if (error) throw error;
+        return (Array.isArray(data) ? data : []).map((o) => ({
+          ...o,
+          inv: o.invoice || "",
+          paid: !!o.paid,
+          shipDate: o.ship_date || "",
+        }));
+      },
+      submitAsk: async (name, phone4, message) => {
+        const { error } = await supabase.rpc("submit_ask", {
+          p_handle: handle,
+          p_name: name,
+          p_phone4: phone4,
+          p_message: message,
+        });
+        return !error;
+      },
+      lookupAsks: async (name, phone4) => {
+        const { data, error } = await supabase.rpc("lookup_asks", { p_handle: handle, p_name: name, p_phone4: phone4 });
+        if (error) throw error;
+        return Array.isArray(data) ? data : [];
+      },
+    }),
+    [handle]
+  );
+
   if (!supabase) return <Page toast={toast}><SetupNeeded /></Page>;
   if (state.loading) return <Page toast={toast}><Center>불러오는 중이에요…</Center></Page>;
   if (!state.settings) {
@@ -492,6 +738,7 @@ export function ShopPage() {
         onMetric={onMetric}
         showTracking={TRACKING_ON}
         showToast={showToast}
+        cs={cs}
       />
     </Page>
   );

@@ -59,7 +59,7 @@ import {
 /* 상수 & 더미 데이터                                                    */
 /* ------------------------------------------------------------------ */
 
-const STORAGE_KEY = "returnlink-simple-v2";
+const STORAGE_KEY = "returnlink-simple-v3";
 
 // 실제 카카오톡 채널 주소로 바꿔 주세요 (예: https://pf.kakao.com/_xxxxxx/chat)
 // 사장님이 설정에 넣은 카카오톡 채널·오픈채팅 주소만 허용해요.
@@ -76,8 +76,8 @@ function validKakaoUrl(u) {
 function RLWord({ className = "" }) {
   return (
     <span className={"font-extrabold " + className}>
-      <span style={{ color: "#0E1B42" }}>Return</span>
-      <span style={{ color: "#12C48B" }}>Link</span>
+      <span style={{ color: "#111827" }}>Return</span>
+      <span style={{ color: "#16A34A" }}>Link</span>
     </span>
   );
 }
@@ -407,14 +407,44 @@ function makeOldRequests() {
 }
 
 // 손님이 배송 조회(track)·진행 조회(lookup)를 한 횟수 (날짜별). 예시 값으로 시작해요.
-const DEFAULT_METRICS = {
-  "2026.11.03": { track: 5, lookup: 2 },
-  "2026.11.05": { track: 4, lookup: 3 },
-  "2026.11.06": { track: 3, lookup: 1 },
-  "2026.11.09": { req: 2, track: 4, lookup: 2 },
-  "2026.11.10": { req: 2, track: 3, lookup: 2 },
-  "2026.11.11": { req: 2, track: 4, lookup: 3 },
-};
+// 데모 예시는 오늘 날짜 기준으로 만들어요. 그래서 언제 열어도 "이번 주" 숫자가 비어 보이지 않아요.
+const DEFAULT_METRICS = (() => {
+  const m = {};
+  const pat = [[2, 5, 3], [1, 4, 2], [2, 3, 2], [0, 4, 1], [1, 3, 2], [2, 4, 3], [1, 2, 1]];
+  const now = new Date();
+  for (let i = 0; i < 14; i += 1) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const [req, track, lookup] = pat[i % 7];
+    const k = d.getFullYear() + "." + pad(d.getMonth() + 1) + "." + pad(d.getDate());
+    m[k] = i < 7 ? { req, track, lookup } : { req: Math.max(0, req - 1), track: Math.max(0, track - 1), lookup };
+  }
+  return m;
+})();
+
+// 예시 접수·주문 날짜를 오늘 기준으로 옮겨요. (가장 최근 예시가 오늘이 되게)
+function demoShiftDays() {
+  const base = new Date(2026, 10, 12);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.round((today - base) / 86400000));
+}
+function shiftDemoDate(v) {
+  if (typeof v !== "string" || !v) return v;
+  const n = demoShiftDays();
+  if (!n) return v;
+  return v.replace(/(\d{4})([.-])(\d{2})\2(\d{2})/, (all, y, sep, mo, d) => {
+    const t = new Date(Number(y), Number(mo) - 1, Number(d) + n);
+    return t.getFullYear() + sep + pad(t.getMonth() + 1) + sep + pad(t.getDate());
+  });
+}
+function shiftDemo(obj, keys) {
+  const out = { ...obj };
+  keys.forEach((k) => {
+    if (out[k]) out[k] = shiftDemoDate(out[k]);
+  });
+  if (typeof out.ts === "number") out.ts += demoShiftDays() * 86400000;
+  return out;
+}
 
 // 통계 계산 기준 (추정치)
 const MIN_PER_REQUEST = 6;
@@ -443,7 +473,7 @@ const INITIAL_REQUESTS = [
   ),
   ...makeOldRequests(),
 ].map((r, i) => ({
-  ...r,
+  ...shiftDemo(r, ["date", "pickupDate", "finishedDate"]),
   phone: "010-" + String(2000 + ((i * 3571) % 7000)) + "-" + r.phone4,
   pickupMethod: i % 3 === 0 ? "other" : "order",
   address: i % 3 === 0 ? SAMPLE_ADDRESSES[i % SAMPLE_ADDRESSES.length] : "",
@@ -475,10 +505,10 @@ const DEMO_ORDERS = [
   { id: "o-6", name: "정다은", p4: "2222", item: "Wide Denim Pants (S)", courier: "", inv: "", paid: true, shipDate: "2026-11-20", created_at: "2026-11-12T14:00:00" },
   { id: "o-7", name: "정다은", p4: "2222", item: "Cotton Knit Vest (그레이)", courier: "", inv: "", paid: true, shipDate: "2026-11-20", created_at: "2026-11-12T14:00:00" },
   { id: "o-5", name: "최유나", p4: "3456", item: "Balloon Skirt (블랙 FREE)", courier: "", inv: "", paid: true, shipDate: "", created_at: "2026-11-12T13:00:00" },
-];
+].map((o) => shiftDemo(o, ["shipDate", "created_at"]));
 const DEMO_ASKS = [
   { id: "a-1", name: "최유나", p4: "3456", message: "입금자명을 엄마 이름(이정희)으로 보냈어요!", answer: "", created_at: "2026-11-12T13:20:00" },
-];
+].map((a) => shiftDemo(a, ["created_at"]));
 
 function stamp() {
   const d = new Date();
@@ -713,7 +743,7 @@ function realTracking(number, courierName, data) {
 const inputClass =
   "w-full rounded-xl border border-neutral-200 bg-white px-3.5 py-3 text-neutral-900 placeholder:text-neutral-400 outline-none transition focus:border-neutral-900 focus:ring-4 focus:ring-neutral-900/10";
 
-const panelClass = "rounded-2xl border border-neutral-200/80 bg-white shadow-card";
+const panelClass = "rounded-2xl border border-neutral-200 bg-white";
 
 const outlineBtn =
   "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-300 bg-white px-4 py-2 text-[13px] font-medium text-neutral-700 transition active:scale-95";
@@ -2720,8 +2750,8 @@ function orderBadge(o) {
   const st = orderStep(o);
   return [
     { label: "결제 확인 전", cls: "bg-neutral-100 text-neutral-600" },
-    { label: "결제 확인", cls: "bg-blue-50 text-blue-700" },
-    { label: "발송 준비", cls: "bg-orange-50 text-orange-700" },
+    { label: "결제 확인", cls: "bg-neutral-100 text-neutral-800" },
+    { label: "발송 준비", cls: "border border-neutral-300 bg-white text-neutral-800" },
     { label: "송장 등록", cls: "bg-emerald-50 text-emerald-700" },
   ][st];
 }
@@ -3292,7 +3322,7 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
               </div>
             ) : null}
             {pending.map.name && pending.map.phone && !pending.map.inv ? (
-              <p className="mt-3 rounded-xl bg-blue-50 px-4 py-2.5 text-[13px] text-blue-800">
+              <p className="mt-3 rounded-xl border border-neutral-200 bg-[#FAF8F5] px-4 py-2.5 text-[13px] text-neutral-700">
                 송장번호 칸이 없어요. 주문만 등록돼요. 송장 엑셀이라면 &lsquo;송장번호&rsquo; 칸을 직접 골라 주세요.
               </p>
             ) : null}
@@ -3363,7 +3393,7 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
             </label>
             <div className="mt-3 flex flex-wrap gap-1.5 text-[12px] font-bold">
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">새 주문 {parsed.add}</span>
-              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">바뀜(송장·결제) {parsed.upd}</span>
+              <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-700">바뀜(송장·결제) {parsed.upd}</span>
               <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-600">그대로 {parsed.same}</span>
               {parsed.bad ? (
                 <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">건너뜀 {parsed.bad}</span>
@@ -3772,7 +3802,7 @@ function GroupShipModal({ group, onClose, onSave }) {
             aria-pressed={paid}
             className={
               "flex w-full items-center justify-center gap-1.5 rounded-xl border px-3.5 py-3 text-[14px] font-semibold " +
-              (paid ? "border-blue-600 bg-blue-50 text-blue-700" : "border-neutral-200 bg-white text-neutral-500")
+              (paid ? "border-neutral-900 bg-neutral-50 text-neutral-900" : "border-neutral-200 bg-white text-neutral-500")
             }
           >
             {paid ? (
@@ -3876,7 +3906,7 @@ function OrderEditModal({ order, onClose, onSave }) {
             aria-pressed={!!d.paid}
             className={
               "flex w-full items-center justify-center gap-1.5 rounded-xl border px-3.5 py-3 text-[14px] font-semibold " +
-              (d.paid ? "border-blue-600 bg-blue-50 text-blue-700" : "border-neutral-200 bg-white text-neutral-500")
+              (d.paid ? "border-neutral-900 bg-neutral-50 text-neutral-900" : "border-neutral-200 bg-white text-neutral-500")
             }
           >
             {d.paid ? (
@@ -3943,7 +3973,7 @@ function AsksPanel({ asks, onAnswer, onDelete, showToast }) {
                 <span
                   className={
                     "rounded-full px-2.5 py-1 text-[12px] font-bold " +
-                    (a.answer ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")
+                    (a.answer ? "bg-neutral-100 text-neutral-600" : "bg-neutral-900 text-white")
                   }
                 >
                   {a.answer ? "답변 완료" : "답변 대기"}
@@ -4163,25 +4193,15 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
 /* 사장님 화면: 대시보드                                                 */
 /* ------------------------------------------------------------------ */
 
-function StatCard({ icon, tone, label, value, unit, pill, pillTone }) {
+function StatCard({ label, value, unit, sub }) {
   return (
-    <div className={panelClass + " p-4 sm:p-5"}>
-      <div className="flex items-center gap-2.5">
-        <span className={"flex h-10 w-10 shrink-0 items-center justify-center rounded-full " + tone}>{icon}</span>
-        <p className="min-w-0 text-[13px] leading-snug text-neutral-600">{label}</p>
-      </div>
-      <p className="mt-3 whitespace-nowrap text-[28px] font-bold leading-tight tracking-tight text-neutral-900">
+    <div className="min-w-0 px-3 py-3.5 sm:px-6 sm:py-5">
+      <p className="text-[12px] font-medium leading-snug text-neutral-500 sm:text-[13px]">{label}</p>
+      <p className="mt-1 whitespace-nowrap text-[22px] font-bold leading-tight tracking-[-0.02em] text-neutral-900 tabular-nums sm:text-[28px]">
         {value}
-        <span className="ml-1 text-[17px] font-semibold">{unit}</span>
+        <span className="ml-0.5 text-[13px] font-semibold text-neutral-700 sm:ml-1 sm:text-[16px]">{unit}</span>
       </p>
-      <span
-        className={
-          "mt-2 inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-full px-2.5 py-1 text-[12px] font-medium leading-snug " +
-          pillTone
-        }
-      >
-        {pill}
-      </span>
+      <div className="mt-1 text-[11.5px] leading-snug text-neutral-500 sm:text-[12.5px]">{sub}</div>
     </div>
   );
 }
@@ -4207,7 +4227,7 @@ function TypeChip({ type }) {
     <span
       className={
         "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-bold " +
-        (isEx ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700")
+        (isEx ? "bg-neutral-100 text-neutral-700" : "border border-neutral-200 bg-white text-neutral-600")
       }
     >
       {isEx ? <ArrowLeftRight size={11} /> : <Undo2 size={11} />}
@@ -4275,14 +4295,14 @@ function StatusCell({ r, onRun }) {
     sub = r.amount > 0 ? "입금 확인 후 진행" : "사장님 확인 후 수거";
   } else if (st === "progress") {
     button = (
-      <button type="button" onClick={() => onRun(r, "next")} className={base + "border-blue-600 bg-blue-600 text-white"}>
+      <button type="button" onClick={() => onRun(r, "next")} className={base + "border-neutral-300 bg-white text-neutral-900 hover:border-neutral-900"}>
         {nextLabel(r)}
       </button>
     );
     sub = "";
   } else if (st === "arrived") {
     button = (
-      <button type="button" onClick={() => onRun(r, "next")} className={base + "border-violet-600 bg-violet-600 text-white"}>
+      <button type="button" onClick={() => onRun(r, "next")} className={base + "border-neutral-300 bg-white text-neutral-900 hover:border-neutral-900"}>
         {nextLabel(r)}
       </button>
     );
@@ -4317,7 +4337,7 @@ function StatusCell({ r, onRun }) {
 
 function MemoChip() {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] font-semibold text-neutral-600">
       <StickyNote size={11} /> 메모
     </span>
   );
@@ -4337,10 +4357,10 @@ const GRID =
 function rowAction(r) {
   const st = statusOf(r);
   if (st === "waiting")
-    return { label: r.amount > 0 ? "입금 확인" : "접수 확인", act: "togglePaid", cls: "bg-neutral-900 text-white" };
-  if (st === "progress") return { label: "수거 완료", act: "next", cls: "bg-blue-600 text-white" };
+    return { label: r.amount > 0 ? "입금 확인" : "접수 확인", act: "togglePaid", cls: "border border-neutral-900 bg-neutral-900 text-white hover:bg-neutral-800" };
+  if (st === "progress") return { label: "수거 완료", act: "next", cls: "border border-neutral-300 bg-white text-neutral-900 hover:border-neutral-900" };
   if (st === "arrived")
-    return { label: r.type === "exchange" ? "발송 완료" : "환불 완료", act: "next", cls: "bg-violet-600 text-white" };
+    return { label: r.type === "exchange" ? "발송 완료" : "환불 완료", act: "next", cls: "border border-neutral-300 bg-white text-neutral-900 hover:border-neutral-900" };
   return null;
 }
 
@@ -4444,18 +4464,11 @@ function FeedbackCard({ onFeedback, showToast }) {
     }
   };
   return (
-    <div className="rounded-xl border border-neutral-200 p-4">
-      <div className="flex gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-50">
-          <Send size={19} className="text-sky-600" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] font-bold text-neutral-900">운영자에게 피드백</h3>
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-neutral-500">
-            불편한 점, 필요한 기능을 남겨 주세요. 운영자가 직접 읽고 반영해요.
-          </p>
-        </div>
-      </div>
+    <div>
+      <h3 className="text-[15px] font-bold text-neutral-900">운영자에게 피드백</h3>
+      <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
+        불편한 점, 필요한 기능을 남겨 주세요. 운영자가 직접 읽고 반영해요.
+      </p>
       <label htmlFor="rl-feedback" className="sr-only">
         피드백 내용
       </label>
@@ -4480,26 +4493,6 @@ function FeedbackCard({ onFeedback, showToast }) {
         >
           {busy ? "보내는 중…" : "보내기"}
         </button>
-      </div>
-    </div>
-  );
-}
-
-function QuickCard({ icon, tone, title, children, action, onAction, external }) {
-  return (
-    <div className="rounded-xl border border-neutral-200 p-4">
-      <div className="flex gap-3">
-        <span className={"flex h-11 w-11 shrink-0 items-center justify-center rounded-full " + tone}>
-          {icon}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[15px] font-bold text-neutral-900">{title}</h3>
-          <div className="mt-1.5 text-[12.5px] leading-relaxed text-neutral-500">{children}</div>
-          <button type="button" onClick={onAction} className={outlineBtn + " mt-3"}>
-            {action}
-            {external ? <ExternalLink size={13} /> : null}
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -4590,14 +4583,13 @@ const smallSelect =
 
 const STAGES = [
   { id: "all", label: "전체", badge: "", empty: "여기에 해당하는 접수가 없어요" },
-  { id: "waiting", label: "확인·입금 대기", badge: "bg-red-50 text-red-600", empty: "확인이나 입금을 기다리는 접수가 없어요" },
-  { id: "progress", label: "수거진행", badge: "bg-blue-50 text-blue-600", empty: "돌아오는 중인 상품이 없어요" },
-  { id: "arrived", label: "발송·환불", badge: "bg-violet-50 text-violet-700", empty: "보내거나 환불할 건이 없어요" },
-  { id: "done", label: "완료", badge: "bg-emerald-50 text-emerald-700", empty: "끝난 건이 없어요" },
+  { id: "waiting", label: "확인·입금 대기", badge: "bg-neutral-900 text-white", empty: "확인이나 입금을 기다리는 접수가 없어요" },
+  { id: "progress", label: "수거진행", badge: "bg-neutral-100 text-neutral-700", empty: "돌아오는 중인 상품이 없어요" },
+  { id: "arrived", label: "발송·환불", badge: "bg-neutral-100 text-neutral-700", empty: "보내거나 환불할 건이 없어요" },
+  { id: "done", label: "완료", badge: "", empty: "끝난 건이 없어요" },
 ];
 
-function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, showToast, openSettings, onFeedback }) {
-  const [guide, setGuide] = useState(false);
+function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, showToast }) {
   const [tab, setTab] = useState("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("new");
@@ -4719,7 +4711,6 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
   const pctChange = weekly.prev.total
     ? Math.round(((weekly.cur.total - weekly.prev.total) / weekly.prev.total) * 100)
     : null;
-  const hourDiff = (weekly.cur.minutes - weekly.prev.minutes) / 60;
   const jump = (t) => {
     setTab(t);
     setQuery("");
@@ -4728,59 +4719,42 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div>
       <div className="min-w-0 space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-3 divide-x divide-neutral-200 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
           <StatCard
-            icon={<MessageCircle className="h-5 w-5 text-violet-500" />}
-            tone="bg-violet-100"
-            label="이번 주 방어한 카톡"
+            label="이번 주 대신 받은 카톡"
             value={weekly.cur.total}
             unit="건"
-            pill={
-              pctChange === null ? (
-                "접수 " + weekly.cur.req + " · 조회 " + weekly.cur.looks
-              ) : (
-                <>
-                  지난 주 대비 {pctChange >= 0 ? "+" : ""}
-                  {pctChange}% {pctChange >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-                </>
-              )
+            sub={
+              pctChange === null
+                ? "접수 " + weekly.cur.req + " · 조회 " + weekly.cur.looks
+                : "지난 주 " + weekly.prev.total + "건 · 접수 " + weekly.cur.req + " · 조회 " + weekly.cur.looks
             }
-            pillTone="bg-violet-50 text-violet-700"
           />
           <StatCard
-            icon={<Clock className="h-5 w-5 text-emerald-700" />}
-            tone="bg-emerald-100"
             label="아낀 CS 시간 (추정)"
             value={(weekly.cur.minutes / 60).toFixed(1)}
             unit="시간"
-            pill={
-              <>
-                지난 주 대비 {hourDiff >= 0 ? "+" : ""}
-                {hourDiff.toFixed(1)}시간 {hourDiff >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-              </>
-            }
-            pillTone="bg-emerald-50 text-emerald-700"
+            sub={"지난 주 " + (weekly.prev.minutes / 60).toFixed(1) + "시간"}
           />
           <StatCard
-            icon={<Box className="h-5 w-5 text-orange-500" />}
-            tone="bg-orange-100"
             label="지금 할 일"
             value={counts.waiting + counts.progress + counts.arrived}
             unit="건"
-            pill={
-              <span className="flex flex-wrap items-center gap-x-2.5">
+            sub={
+              <span className="flex flex-wrap items-center gap-x-1">
                 {[
-                  { id: "waiting", label: "입금", n: counts.waiting },
+                  { id: "waiting", label: "확인·입금", n: counts.waiting },
                   { id: "progress", label: "수거", n: counts.progress },
                   { id: "arrived", label: "발송", n: counts.arrived },
                 ].map((x, i) => (
-                  <span key={x.id} className="flex items-center">
+                  <span key={x.id} className="flex items-center gap-1">
+                    {i ? <span className="text-neutral-300">·</span> : null}
                     <button
                       type="button"
                       onClick={() => jump(x.id)}
-                      className="underline decoration-orange-300 underline-offset-2"
+                      className="text-neutral-700 underline decoration-neutral-300 underline-offset-[3px] hover:text-neutral-900"
                     >
                       {x.label} {x.n}
                     </button>
@@ -4788,7 +4762,6 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
                 ))}
               </span>
             }
-            pillTone="bg-orange-50 text-orange-700"
           />
         </div>
 
@@ -5060,85 +5033,6 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
       ) : null}
       </div>
 
-      <aside className={panelClass + " h-fit space-y-4 p-5"}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-[17px] font-bold text-neutral-900">빠른 설정</h2>
-          <button
-            type="button"
-            onClick={() => openSettings && openSettings("profile")}
-            aria-label="설정 열기"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100"
-          >
-            <Settings size={18} />
-          </button>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1">
-          <QuickCard
-            icon={<Palette size={20} className="text-rose-500" />}
-            tone="bg-rose-50"
-            title="손님 화면 꾸미기"
-            action="꾸미기"
-            onAction={() => openSettings && openSettings("profile")}
-          >
-            <p>프로필 사진, 소개 문구, 글꼴({fontOf(settings.font).name})을 바꿀 수 있어요.</p>
-          </QuickCard>
-          <QuickCard
-            icon={<Shirt size={20} className="text-emerald-700" />}
-            tone="bg-emerald-50"
-            title="상품·사유 관리"
-            action="관리하기"
-            onAction={() => openSettings && openSettings("products")}
-          >
-            <p>
-              {settings.productMode === "list"
-                ? "등록 상품 " + settings.products.length + "개에서 손님이 골라요."
-                : "손님이 상품명을 직접 입력해요."}
-            </p>
-            <p>교환·반품 사유 {settings.reasons.length}개</p>
-          </QuickCard>
-          <QuickCard
-            icon={<CreditCard size={20} className="text-blue-600" />}
-            tone="bg-blue-50"
-            title="계좌·배송비"
-            action="수정"
-            onAction={() => openSettings && openSettings("pay")}
-          >
-            <p>
-              {settings.bank ? settings.bank + " " : ""}
-              {settings.accountNumber}
-            </p>
-            <p>예금주: {settings.accountHolder}</p>
-          </QuickCard>
-          <QuickCard
-            icon={<MessageCircle size={20} className="text-violet-600" />}
-            tone="bg-violet-50"
-            title="FAQ 빠른 수정"
-            action="관리하기"
-            onAction={() => openSettings && openSettings("faq")}
-          >
-            <p>자주 묻는 질문 {settings.faqs.length}개를 손님 화면에 보여 주고 있어요.</p>
-          </QuickCard>
-          <QuickCard
-            icon={<Lightbulb size={20} className="text-amber-500" />}
-            tone="bg-amber-50"
-            title="도움말"
-            action={guide ? "가이드 접기" : "가이드 보기"}
-            onAction={() => setGuide(!guide)}
-          >
-            <p>처리 순서와 팁을 확인해 보세요.</p>
-            {guide ? (
-              <ol className="mt-2 list-decimal space-y-1 pl-4 text-neutral-600">
-                <li>내 링크를 복사해 인스타 프로필에 붙여요.</li>
-                <li>입금이 들어오면 입금 확인을, 판매자 부담 접수는 내용을 보고 접수 확인을 눌러요. 수거 단계로 넘어가요.</li>
-                <li>택배사에 회수를 접수하고, 상품이 도착하면 수거 완료를 눌러요.</li>
-                <li>교환품을 보내거나 환불한 뒤 버튼을 누르면 완료 탭으로 가요.</li>
-                <li>잘못 눌렀다면 되돌리기로 한 단계 돌아가요.</li>
-              </ol>
-            ) : null}
-          </QuickCard>
-          <FeedbackCard onFeedback={onFeedback} showToast={showToast} />
-        </div>
-      </aside>
     </div>
   );
 }
@@ -5293,7 +5187,7 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-1.5 text-[13px] font-bold text-neutral-900">
             {typeLabel} #{r.no}
-            <span className="whitespace-nowrap rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-600">
+            <span className="whitespace-nowrap rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] font-semibold text-neutral-700">
               {statusLabel}
             </span>
           </p>
@@ -5481,7 +5375,7 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
         <section className="space-y-3 rounded-xl border border-neutral-200 p-4">
           <p className="flex items-center gap-1.5 text-[12px] font-semibold text-neutral-900">
             교환 요청 정보
-            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] text-blue-600">교환 요청</span>
+            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] text-neutral-700">교환 요청</span>
           </p>
           <p className="text-[13px] text-neutral-700">{r.option}</p>
         </section>
@@ -6358,7 +6252,7 @@ function KakaoButton({ onClick, children, className = "" }) {
       type="button"
       onClick={onClick}
       className={
-        "flex items-center justify-center gap-2 rounded-xl bg-[#FEE500] px-6 py-4 text-[15px] font-bold text-[#191919] shadow-card transition active:scale-[0.98] " +
+        "flex items-center justify-center gap-2 rounded-xl border border-[#FEE500] bg-[#FEE500] px-6 py-4 text-[15px] font-bold text-[#191919] transition-colors duration-[180ms] hover:border-[#EBD300] hover:bg-[#F5DC00] " +
         className
       }
     >
@@ -6368,48 +6262,107 @@ function KakaoButton({ onClick, children, className = "" }) {
   );
 }
 
+/* 랜딩 스크롤 모션: 처음 보일 때 한 번만, 작게, 차분하게 */
+const EASE_OUT = "cubic-bezier(0.16, 1, 0.3, 1)";
+
+function reducedMotion() {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch (e) {
+    return false;
+  }
+}
+
+function useInViewOnce(margin = "0px 0px -8% 0px") {
+  const ref = useRef(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || seen) return undefined;
+    if (reducedMotion() || typeof IntersectionObserver === "undefined") {
+      setSeen(true);
+      return undefined;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setSeen(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: margin, threshold: 0.12 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen, margin]);
+  return [ref, seen];
+}
+
+function Reveal({ as: Tag = "div", delay = 0, className = "", children, ...rest }) {
+  const [ref, seen] = useInViewOnce();
+  return (
+    <Tag
+      ref={ref}
+      className={className}
+      style={{
+        opacity: seen ? 1 : 0,
+        transform: seen ? "none" : "translateY(12px)",
+        transition: "opacity 450ms " + EASE_OUT + " " + delay + "ms, transform 450ms " + EASE_OUT + " " + delay + "ms",
+      }}
+      {...rest}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+function CountUp({ to, decimals = 0, duration = 1200, delay = 150 }) {
+  const [ref, seen] = useInViewOnce("0px 0px -25% 0px");
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    if (!seen) return undefined;
+    if (reducedMotion()) {
+      setV(to);
+      return undefined;
+    }
+    let raf = 0;
+    const start = performance.now() + delay;
+    const tick = (now) => {
+      const t = Math.max(0, Math.min(1, (now - start) / duration));
+      const e = t === 1 ? 1 : 1 - Math.pow(2, -10 * t); // easeOutExpo
+      setV(to * e);
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [seen, to, duration, delay]);
+  return (
+    <span ref={ref} className="tabular-nums">
+      {v.toFixed(decimals)}
+    </span>
+  );
+}
+
 const SHOWCASE = [
   {
-    src: "/showcase/1.webp",
-    title: "방어한 카톡과 아낀 시간이 한눈에",
-    desc: "사장님 화면에서 이번 주 숫자가 바로 보여요",
-    alt: "이번 주 카톡 32건을 대신 막아 줬어요. 아낀 시간 4.1시간, 지금 할 일 12건",
+    src: "/showcase/s1.webp",
+    tab: "엑셀·송장 조회",
+    alt: "택배사·스마트스토어 엑셀을 올리면 손님 주문 조회 화면에 송장번호가 자동으로 연결되는 모습",
   },
   {
-    src: "/showcase/6.webp",
-    title: "\"언제 와요?\" 카톡이 사라져요",
-    desc: "손님이 결제 확인·발송 예정일·송장을 직접 확인해요",
-    alt: "손님이 이름과 전화번호 뒤 4자리로 주문 상태와 발송 예정일을 조회하는 화면",
+    src: "/showcase/s2.webp",
+    tab: "교환·반품",
+    alt: "손님이 상품과 옵션을 눌러 고르고, 왕복 배송비와 입금 계좌를 안내받는 교환 접수 화면",
   },
   {
-    src: "/showcase/2.webp",
-    title: "입금·수거·발송, 체크만 하세요",
-    desc: "단계별 탭과 버튼 하나로 다음 단계로 넘겨요",
-    alt: "접수 목록과 입금확인대기, 수거진행, 발송 탭",
+    src: "/showcase/s3.webp",
+    tab: "체크리스트",
+    alt: "사장님 화면에서 입금 확인, 수거 완료, 발송 완료를 버튼 하나로 처리하는 접수 목록",
   },
   {
-    src: "/showcase/3.webp",
-    title: "손님은 내 링크로 들어와서 접수해요",
-    desc: "가입이나 앱 설치 없이 바로 시작해요",
-    alt: "손님이 보는 마켓 접수 화면",
-  },
-  {
-    src: "/showcase/4.webp",
-    title: "상품과 옵션은 눌러서 고르기만",
-    desc: "다시 물어볼 필요 없이 정확하게 들어와요",
-    alt: "손님이 상품과 옵션을 골라 교환을 접수하는 화면",
-  },
-  {
-    src: "/showcase/7.webp",
-    title: "엑셀 한 번, 체크 한 번으로 끝",
-    desc: "결제 확인·발송 예정일·송장을 여러 손님에게 한 번에",
-    alt: "사장님이 주문 목록에서 여러 손님을 체크해 발송 예정일을 한 번에 정하는 화면",
-  },
-  {
-    src: "/showcase/5.webp",
-    title: "빠른 설정으로 내 마켓을 바로 손봐요",
-    desc: "꾸미기, 상품, 계좌, FAQ를 한곳에서 고쳐요",
-    alt: "사장님 화면의 빠른 설정 카드",
+    src: "/showcase/s4.webp",
+    tab: "1:1 문의",
+    alt: "마켓 이름과 로고가 보이는 전용 1:1 문의 창구와 사장님 답변",
   },
 ];
 
@@ -6418,25 +6371,20 @@ function Showcase() {
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    if (paused) return undefined;
-    try {
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return undefined;
-    } catch (e) {
-      /* 무시 */
-    }
-    const t = setInterval(() => setI((v) => (v + 1) % SHOWCASE.length), 3800);
+    if (paused || reducedMotion()) return undefined;
+    const t = setInterval(() => setI((v) => (v + 1) % SHOWCASE.length), 4500);
     return () => clearInterval(t);
-  }, [paused]);
+  }, [paused, i]);
 
   return (
     <div
       className="mx-auto w-full max-w-[560px]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      onTouchStart={() => setPaused(true)}
-      onTouchEnd={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
     >
-      <div className="relative aspect-[1600/1060] overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-card">
+      <div className="relative aspect-[1600/1060] overflow-hidden rounded-2xl border border-neutral-200 bg-white">
         {SHOWCASE.map((x, n) => (
           <img
             key={x.src}
@@ -6446,28 +6394,29 @@ function Showcase() {
             loading={n === 0 ? "eager" : "lazy"}
             draggable={false}
             className={
-              "absolute inset-0 h-full w-full object-cover transition-opacity duration-700 " +
+              "absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-out motion-reduce:transition-none " +
               (n === i ? "opacity-100" : "opacity-0")
             }
           />
         ))}
       </div>
 
-      <div className="mt-2 flex items-center justify-center gap-1">
+      <div role="tablist" aria-label="미리보기 화면 고르기" className="mt-3 grid grid-cols-4 border-t border-neutral-200">
         {SHOWCASE.map((x, n) => (
           <button
             key={x.src}
             type="button"
+            role="tab"
+            aria-selected={n === i}
             onClick={() => setI(n)}
-            aria-label={n + 1 + "번째 사진 보기"}
-            aria-current={n === i}
-            className="flex h-8 w-6 items-center justify-center"
+            className={
+              "-mt-px whitespace-nowrap border-t px-1 pb-1 pt-2.5 text-[12px] transition-colors duration-[180ms] sm:text-[13px] " +
+              (n === i
+                ? "border-neutral-900 font-semibold text-neutral-900"
+                : "border-transparent font-medium text-neutral-400 hover:text-neutral-700")
+            }
           >
-            <span
-              className={
-                "block h-1.5 rounded-full transition-all " + (n === i ? "w-5 bg-neutral-900" : "w-1.5 bg-neutral-300")
-              }
-            />
+            {x.tab}
           </button>
         ))}
       </div>
@@ -6475,56 +6424,167 @@ function Showcase() {
   );
 }
 
-function LandingStats() {
+function LandingHeader({ onStart, onDemo, sticky = true }) {
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 16);
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  const go = (id) => {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  const link = "hidden h-9 items-center rounded-lg px-3 text-[14px] font-medium text-neutral-600 transition-colors duration-[180ms] hover:bg-black/[0.04] hover:text-neutral-900 sm:flex";
   return (
-    <section className="mx-auto max-w-5xl px-5 pb-14">
-      <div className="text-center">
-        <p className="text-[13px] font-bold text-emerald-700">사장님 화면 미리보기</p>
-        <h2 className="mt-1 text-[24px] font-bold tracking-tight text-neutral-900">
-          방어한 카톡과 아낀 시간이 숫자로 쌓여요
-        </h2>
+    <header
+      className={
+        (sticky ? "sticky top-0 z-30 " : "") +
+        "border-b transition-[background-color,border-color,backdrop-filter] duration-300 ease-out motion-reduce:transition-none " +
+        (scrolled ? "border-[#E5E2DC] bg-[#FAF8F5]/85 backdrop-blur-md" : "border-transparent bg-transparent")
+      }
+    >
+      <div className="mx-auto flex h-14 max-w-5xl items-center gap-1 px-5">
+        <a href="/" className="mr-auto text-[18px] tracking-tight" aria-label="리턴링크 홈">
+          <RLWord />
+        </a>
+        <button type="button" onClick={() => go("features")} className={link}>
+          기능
+        </button>
+        {onDemo ? (
+          <button
+            type="button"
+            onClick={onDemo}
+            className="flex h-9 items-center whitespace-nowrap rounded-lg px-3 text-[14px] font-medium text-neutral-600 transition-colors duration-[180ms] hover:bg-black/[0.04] hover:text-neutral-900"
+          >
+            데모 체험
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onStart}
+          className="ml-1 flex h-9 items-center whitespace-nowrap rounded-lg bg-neutral-900 px-3.5 text-[13.5px] font-semibold text-white transition-colors duration-[180ms] hover:bg-neutral-700"
+        >
+          시작하기
+        </button>
       </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <StatCard
-          icon={<MessageCircle className="h-5 w-5 text-violet-500" />}
-          tone="bg-violet-100"
-          label="이번 주 방어한 카톡"
-          value={32}
-          unit="건"
-          pill={
-            <>
-              지난 주 대비 +19% <ArrowUp size={12} />
-            </>
-          }
-          pillTone="bg-violet-50 text-violet-700"
-        />
-        <StatCard
-          icon={<Clock className="h-5 w-5 text-emerald-700" />}
-          tone="bg-emerald-100"
-          label="아낀 CS 시간 (추정)"
-          value="4.1"
-          unit="시간"
-          pill={
-            <>
-              지난 주 대비 +0.8시간 <ArrowUp size={12} />
-            </>
-          }
-          pillTone="bg-emerald-50 text-emerald-700"
-        />
-        <StatCard
-          icon={<Box className="h-5 w-5 text-orange-500" />}
-          tone="bg-orange-100"
-          label="지금 할 일"
-          value={12}
-          unit="건"
-          pill="입금 4 · 수거 5 · 발송 3"
-          pillTone="bg-orange-50 text-orange-700"
-        />
+    </header>
+  );
+}
+
+function SectionHead({ eyebrow, title, desc }) {
+  return (
+    <Reveal className="max-w-2xl">
+      {eyebrow ? <p className="text-[13px] font-semibold text-emerald-700">{eyebrow}</p> : null}
+      <h2 className="mt-2 text-[24px] font-bold leading-[1.35] tracking-[-0.02em] text-neutral-900 md:text-[28px]">
+        {title}
+      </h2>
+      {desc ? <p className="mt-2 text-[15px] leading-[1.7] text-neutral-500">{desc}</p> : null}
+    </Reveal>
+  );
+}
+
+function LandingStats() {
+  const stats = [
+    { label: "이번 주 대신 받은 카톡", value: 32, unit: "건", sub: "접수와 손님 조회를 합친 수", Icon: MessageCircle },
+    { label: "아낀 CS 시간", value: 4.1, decimals: 1, unit: "시간", sub: "접수 1건 6분 · 조회 1회 2분 기준 추정", Icon: Clock },
+    { label: "지금 할 일", value: 12, unit: "건", chips: ["입금 4", "수거 5", "발송 3"], Icon: Box },
+  ];
+  const rows = [
+    {
+      name: "김민지",
+      type: "exchange",
+      kind: "jacket",
+      product: "Classic Wool Jacket",
+      option: "블랙 M → 블랙 L",
+      meta: "사이즈 불만족 · 배송비 6,000원 입금됨 · 방금 전",
+      action: "수거 완료",
+      primary: false,
+    },
+    {
+      name: "이서연",
+      type: "return",
+      kind: "pants",
+      product: "Wide Denim Pants (M)",
+      option: "",
+      meta: "단순 변심 · 배송비 6,000원 입금 전 · 12분 전",
+      action: "입금 확인",
+      primary: true,
+    },
+  ];
+  return (
+    <div className="mt-6 overflow-hidden rounded-2xl border border-neutral-200 bg-white" aria-label="사장님 화면 예시">
+      <div className="grid sm:grid-cols-3">
+        {stats.map((x, i) => (
+          <div
+            key={x.label}
+            className={"relative px-5 py-5 sm:px-6 " + (i ? "border-t border-neutral-200 sm:border-l sm:border-t-0" : "")}
+          >
+            <x.Icon size={20} strokeWidth={1.5} className="absolute right-5 top-5 text-neutral-400 sm:right-6" aria-hidden="true" />
+            <p className="pr-8 text-[13px] font-medium text-neutral-500">{x.label}</p>
+            <p className="mt-1.5 whitespace-nowrap text-[30px] font-bold leading-tight tracking-[-0.02em] text-neutral-900 tabular-nums">
+              <CountUp to={x.value} decimals={x.decimals || 0} />
+              <span className="ml-1 text-[16px] font-semibold text-neutral-700">{x.unit}</span>
+            </p>
+            {x.chips ? (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {x.chips.map((c) => (
+                  <span
+                    key={c}
+                    className="rounded-md border border-neutral-200 bg-[#FAF8F5] px-2 py-0.5 text-[12px] font-medium text-neutral-700 tabular-nums"
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-[12.5px] text-neutral-500">{x.sub}</p>
+            )}
+          </div>
+        ))}
       </div>
-      <p className="mt-3 text-center text-[12px] text-neutral-400">
-        예시 화면이에요. 가입하면 내 접수와 조회가 이렇게 숫자로 쌓여요.
-      </p>
-    </section>
+
+      <div className="border-t border-neutral-200">
+        <div className="flex items-center gap-4 border-b border-neutral-200 px-5 text-[13.5px] sm:px-6">
+          <span className="-mb-px border-b-2 border-neutral-900 py-3 font-bold text-neutral-900">
+            전체 <span className="tabular-nums">28</span>
+          </span>
+          <span className="flex items-center gap-1.5 py-3 text-neutral-500">
+            확인·입금 대기
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-neutral-900 px-1.5 text-[11px] font-semibold text-white">
+              4
+            </span>
+          </span>
+          <span className="hidden py-3 text-neutral-500 sm:inline">수거진행 5</span>
+        </div>
+        {rows.map((r, i) => (
+          <div key={r.name} className={"flex items-center gap-3 px-5 py-3.5 sm:px-6 " + (i ? "border-t border-neutral-100" : "")}>
+            <Thumb kind={r.kind} size="h-11 w-11" />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-center gap-1.5">
+                <span className="text-[14.5px] font-semibold text-neutral-900">{r.name}</span>
+                <TypeChip type={r.type} />
+              </p>
+              <p className="truncate text-[13px] text-neutral-700">
+                {r.product}
+                {r.option ? <span className="text-neutral-500"> · {r.option}</span> : null}
+              </p>
+              <p className="truncate text-[12px] text-neutral-400">{r.meta}</p>
+            </div>
+            <span
+              aria-hidden="true"
+              className={
+                "flex h-9 shrink-0 items-center whitespace-nowrap rounded-lg border px-3 text-[12.5px] font-semibold " +
+                (r.primary ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white text-neutral-900")
+              }
+            >
+              {r.action}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -6559,9 +6619,22 @@ function HeroMock() {
   );
 }
 
-export function Landing({ onStart, onDemo }) {
+const LANDING_FEATURES = [
+  { t: "교환·반품 접수", d: "손님이 상품·옵션·사유를 골라 접수하고, 배송비 안내와 입금까지 한 번에 끝내요." },
+  { t: "주문·발송 조회", d: "엑셀로 주문과 송장을 올리면 손님이 결제 확인부터 송장까지 직접 확인해요." },
+  { t: "1:1 문의", d: "카톡 대신 문의를 남기고, 사장님 답변을 같은 화면에서 확인해요." },
+  { t: "단계별 체크리스트", d: "입금 확인 → 수거 → 발송·환불을 버튼 하나로 넘기고, 잘못 누르면 되돌려요." },
+];
+
+const LANDING_COMPARE = [
+  { k: "접수 정보", kakao: "상품명·사이즈·사유를 하나씩 다시 물어봐요", rl: "필요한 정보가 한 번에 정리돼서 들어와요" },
+  { k: "계좌·배송비", kakao: "계좌번호와 배송비를 매번 복사해 보내요", rl: "손님 화면에 자동으로 안내돼요" },
+  { k: "입금 확인", kakao: "대화를 뒤져서 입금했는지 찾아요", rl: "입금·수거·발송을 한 화면에서 체크해요" },
+  { k: "진행 문의", kakao: "“언제 와요?”에 계속 답장해요", rl: "손님이 진행 상황을 직접 조회해요" },
+];
+
+export function Landing({ onStart, onDemo, headerSticky = true }) {
   const [openFaq, setOpenFaq] = useState(-1);
-  const [whyOpen, setWhyOpen] = useState(false);
   const faqs = [
     {
       q: "손님도 가입해야 하나요?",
@@ -6576,225 +6649,176 @@ export function Landing({ onStart, onDemo }) {
       a: "접수 때 동의를 받고, 처리가 끝난 건은 90일 뒤 자동으로 지워져요. 다른 사장님은 내 접수를 볼 수 없어요.",
     },
     {
-      q: "왜 무료인가요?",
-      a: "더 나은 서비스를 위해 실제로 써 보신 사장님들의 피드백이 필요해요. 그래서 먼저 함께해 주시는 사장님 20분께는 평생 무료로 드려요. 카드 등록도 없고, 접수 개수 제한도 없어요.",
-    },
-    {
       q: "그만 쓰고 싶으면요?",
       a: "사장님 화면 설정에서 언제든 탈퇴할 수 있어요. 탈퇴하면 마켓 정보와 접수 기록이 모두 바로 지워져요.",
     },
   ];
+  const section = "mx-auto max-w-5xl px-5 py-16 md:py-20";
 
   return (
     <div className="bg-[#F5F4F1]">
-      <section className="mx-auto grid max-w-5xl items-center gap-10 px-5 pb-14 pt-10 md:grid-cols-2 md:pt-16">
-        <div>
-          <p className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[12px] font-semibold text-emerald-700">
-            <Store size={13} /> 인스타 1인 마켓 전용
-          </p>
-          <h1 className="mt-4 text-[32px] font-bold leading-[1.25] tracking-tight text-neutral-900 md:text-[42px]">
+      <LandingHeader onStart={onStart} onDemo={onDemo} sticky={headerSticky} />
+
+      <section className="mx-auto grid max-w-5xl items-center gap-10 px-5 pb-16 pt-10 md:grid-cols-[1fr_1.05fr] md:pb-20 md:pt-16">
+        <Reveal>
+          <p className="text-[13px] font-semibold text-emerald-700">인스타 1인 마켓을 위한 CS 포털</p>
+          <h1 className="mt-3 text-[30px] font-bold leading-[1.3] tracking-[-0.03em] text-neutral-900 md:text-[42px]">
             반품·교환 카톡,
             <br />
             이제 링크 하나로 받으세요
           </h1>
-          <p className="mt-4 text-[15px] leading-relaxed text-neutral-600">
-            손님은 링크에서 1분 만에 접수하고, 사장님은 입금·수거·발송을 체크리스트로 관리해요. 카톡으로
-            하나하나 주고받을 필요가 없어요.
+          <p className="mt-4 max-w-md text-[15.5px] leading-[1.75] text-neutral-600">
+            손님은 링크에서 1분 만에 접수하고, 사장님은 입금·수거·발송을 체크리스트로 관리해요. 카톡으로 하나하나
+            주고받을 필요가 없어요.
           </p>
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-7 flex flex-col gap-2 sm:flex-row">
             <KakaoButton onClick={onStart}>카카오로 3초 만에 시작하기</KakaoButton>
             {onDemo ? (
               <button
                 type="button"
                 onClick={onDemo}
-                className="flex items-center justify-center gap-2 rounded-xl border-2 border-emerald-600 bg-emerald-600 px-6 py-4 text-[16px] font-bold text-white shadow-card transition hover:bg-emerald-700 active:scale-[0.98]"
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-6 py-4 text-[15px] font-semibold text-neutral-900 transition-colors duration-[180ms] hover:border-neutral-900 hover:bg-[#FAF8F5]"
               >
-                <Eye size={18} />
-                구경할래요!
+                데모 체험하기
+                <ArrowRight size={16} />
               </button>
             ) : null}
           </div>
-          <p className="mt-3 text-[12.5px] text-neutral-500">무료 · 접수 무제한 · 카드 등록 없음</p>
-        </div>
-        <Showcase />
+          <p className="mt-3 text-[12.5px] text-neutral-500">완전 무료 · 카드 등록 없음</p>
+        </Reveal>
+        <Reveal delay={60}>
+          <Showcase />
+        </Reveal>
       </section>
 
-      <LandingStats />
-
-      <section className="bg-white py-14">
-        <div className="mx-auto max-w-5xl px-5">
-          <h2 className="text-center text-[24px] font-bold tracking-tight text-neutral-900">
-            카톡으로 받을 때 vs 리턴링크
-          </h2>
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-6">
-              <p className="text-[14px] font-bold text-neutral-500">카톡으로 받으면</p>
-              <ul className="mt-3 space-y-2.5 text-[14px] text-neutral-600">
-                {[
-                  "상품명, 사이즈, 사유를 하나씩 다시 물어봐요",
-                  "계좌번호와 배송비를 매번 복사해 보내요",
-                  "입금했는지 대화를 뒤져서 확인해요",
-                  "“언제 와요?” 문의에 계속 답장해요",
-                ].map((t) => (
-                  <li key={t} className="flex gap-2">
-                    <X size={16} className="mt-0.5 shrink-0 text-neutral-400" />
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-2xl border-2 border-emerald-500 bg-white p-6">
-              <p className="text-[14px] font-bold text-emerald-700">리턴링크를 쓰면</p>
-              <ul className="mt-3 space-y-2.5 text-[14px] text-neutral-800">
-                {[
-                  "필요한 정보가 한 번에 정리돼서 들어와요",
-                  "계좌와 배송비는 손님 화면에 자동으로 안내돼요",
-                  "입금·수거·발송을 한 화면에서 체크해요",
-                  "손님이 진행 상황을 직접 조회해요",
-                ].map((t) => (
-                  <li key={t} className="flex gap-2">
-                    <Check size={16} className="mt-0.5 shrink-0 text-emerald-600" strokeWidth={3} />
-                    {t}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+      <section id="features" className="scroll-mt-14 border-t border-neutral-200">
+        <div className={section}>
+          <SectionHead
+            eyebrow="기능"
+            title="카톡으로 하던 CS를 한곳에서"
+            desc="손님은 링크 하나로 접수·조회·문의를 하고, 사장님은 쌓인 일을 단계별로 처리해요."
+          />
+          <ul className="mt-10 grid gap-x-10 sm:grid-cols-2">
+            {LANDING_FEATURES.map((f, i) => (
+              <Reveal as="li" key={f.t} delay={i * 60} className="flex gap-4 border-t border-neutral-200 py-5">
+                <span className="w-6 shrink-0 pt-0.5 text-[13px] font-semibold tabular-nums text-neutral-400">
+                  {pad(i + 1)}
+                </span>
+                <div>
+                  <p className="text-[16px] font-bold tracking-[-0.01em] text-neutral-900">{f.t}</p>
+                  <p className="mt-1 text-[14px] leading-[1.7] text-neutral-500">{f.d}</p>
+                </div>
+              </Reveal>
+            ))}
+          </ul>
+          <Reveal className="mt-12">
+            <p className="text-[15px] font-bold text-neutral-900">사장님 화면에서는 이렇게 보여요</p>
+            <LandingStats />
+            <p className="mt-3 text-[12px] text-neutral-400">예시 화면이에요. 가입하면 내 접수와 조회가 이렇게 쌓여요.</p>
+          </Reveal>
         </div>
       </section>
 
-      <section className="mx-auto max-w-5xl px-5 py-14">
-        <h2 className="text-center text-[24px] font-bold tracking-tight text-neutral-900">시작은 1분이면 돼요</h2>
-        <ol className="mt-8 grid gap-4 md:grid-cols-3">
-          {[
-            { t: "가입하고 내 링크 만들기", d: "카카오로 가입하고 마켓 이름, 계좌, 배송비만 적으면 내 링크가 생겨요." },
-            { t: "인스타 프로필에 붙이기", d: "프로필 링크와 카톡 자동응답에 붙여 두면 손님이 알아서 들어와요." },
-            { t: "접수 오면 체크만", d: "입금 확인, 수거 완료, 발송 완료를 차례로 누르면 끝이에요." },
-          ].map((s, i) => (
-            <li key={s.t} className={panelClass + " p-6"}>
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-[14px] font-bold text-white">
-                {i + 1}
-              </span>
-              <p className="mt-3 text-[16px] font-bold text-neutral-900">{s.t}</p>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-neutral-500">{s.d}</p>
-            </li>
-          ))}
-        </ol>
+      <section className="border-t border-neutral-200">
+        <div className={section}>
+          <SectionHead eyebrow="비교" title="카톡으로 받을 때와 무엇이 다른가요" />
+          <Reveal className="mt-10 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+            <div className="hidden grid-cols-[160px_1fr_1fr] border-b border-neutral-200 bg-[#FAF8F5] text-[13px] font-semibold md:grid">
+              <span className="px-6 py-3.5 text-neutral-500">항목</span>
+              <span className="px-6 py-3.5 text-neutral-500">카톡으로 받으면</span>
+              <span className="px-6 py-3.5 text-neutral-900">리턴링크를 쓰면</span>
+            </div>
+            {LANDING_COMPARE.map((row, i) => (
+              <div
+                key={row.k}
+                className={"grid gap-1.5 px-5 py-4 md:grid-cols-[160px_1fr_1fr] md:gap-0 md:px-0 md:py-0 " + (i ? "border-t border-neutral-200" : "")}
+              >
+                <span className="text-[13px] font-semibold text-neutral-900 md:px-6 md:py-4 md:text-[14px]">{row.k}</span>
+                <span className="flex gap-2 text-[14px] leading-[1.6] text-neutral-400 md:px-6 md:py-4">
+                  <X size={15} className="mt-[3px] shrink-0" />
+                  {row.kakao}
+                </span>
+                <span className="flex gap-2 text-[14px] font-medium leading-[1.6] text-neutral-900 md:px-6 md:py-4">
+                  <Check size={15} strokeWidth={2.5} className="mt-[3px] shrink-0 text-emerald-600" />
+                  {row.rl}
+                </span>
+              </div>
+            ))}
+          </Reveal>
+        </div>
       </section>
 
-      <section className="bg-white py-14">
-        <div className="mx-auto max-w-3xl px-5">
-          <h2 className="text-center text-[24px] font-bold tracking-tight text-neutral-900">요금</h2>
-          <div className="relative mx-auto mt-8 max-w-md rounded-2xl border-2 border-neutral-900 bg-white p-6">
-            <span className="absolute -top-3 left-6 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white">
-              무료
-            </span>
-            <p className="text-[15px] font-bold text-neutral-900">리턴링크</p>
-            <p className="mt-2 text-[34px] font-extrabold tracking-wide text-blue-600">FREE</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-neutral-500">
-              모든 기능을 무료로 써요.
-            </p>
-            <ul className="mt-4 space-y-2 text-[13.5px] text-neutral-700">
-              {[
-                "접수 무제한 · 모든 기능 그대로",
-                "카드 등록 없음",
-                "가입은 카카오로 3초",
-                "언제든 탈퇴할 수 있어요",
-              ].map((t) => (
-                <li key={t} className="flex gap-2">
-                  <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" /> {t}
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              onClick={onStart}
-              className="mt-6 w-full rounded-xl bg-neutral-900 py-3.5 text-[14px] font-semibold text-white"
-            >
-              지금 무료로 시작하기
-            </button>
-            <p className="mt-2.5 text-center text-[12.5px] font-semibold text-red-600">
-              평생 무료 혜택이 얼마 남지 않았어요!
-            </p>
-          </div>
+      <section className="border-t border-neutral-200">
+        <div className={section}>
+          <SectionHead eyebrow="시작하기" title="시작은 1분이면 돼요" />
+          <ol className="mt-10 grid gap-8 md:grid-cols-3">
+            {[
+              { t: "가입하고 내 링크 만들기", d: "카카오로 가입하고 마켓 이름, 계좌, 배송비만 적으면 내 링크가 생겨요." },
+              { t: "인스타 프로필에 붙이기", d: "프로필 링크와 카톡 자동응답에 붙여 두면 손님이 알아서 들어와요." },
+              { t: "접수 오면 체크만", d: "입금 확인, 수거 완료, 발송 완료를 차례로 누르면 끝이에요." },
+            ].map((s, i) => (
+              <Reveal as="li" key={s.t} delay={i * 60} className="border-t-2 border-neutral-900 pt-4">
+                <span className="text-[13px] font-semibold tabular-nums text-emerald-700">STEP {pad(i + 1)}</span>
+                <p className="mt-2 text-[17px] font-bold tracking-[-0.01em] text-neutral-900">{s.t}</p>
+                <p className="mt-1.5 text-[14px] leading-[1.7] text-neutral-500">{s.d}</p>
+              </Reveal>
+            ))}
+          </ol>
+        </div>
+      </section>
 
-          <div className="mx-auto mt-6 max-w-md overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50">
-            <button
-              type="button"
-              onClick={() => setWhyOpen(!whyOpen)}
-              aria-expanded={whyOpen}
-              className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left"
-            >
-              <span className="text-[16px] font-bold text-neutral-900">왜 무료인가요?</span>
-              <ChevronDown
-                size={18}
-                className={"shrink-0 text-emerald-700 transition " + (whyOpen ? "rotate-180" : "")}
-              />
-            </button>
-            {whyOpen ? (
-              <div className="animate-fade-up px-6 pb-6">
-                <p className="text-[14px] leading-relaxed text-neutral-700">
-                  리턴링크는 사장님들께 더 나은 서비스를 드리기 위해 실제로 써 보신 분들의 피드백이 필요해요.
-                </p>
-                <p className="mt-2 text-[14px] leading-relaxed text-neutral-700">
-                  그래서 먼저 함께해 주시는 <b className="text-emerald-700">사장님 20분께는 평생 무료</b>로 드려요. 써 보시고
-                  불편한 점이나 필요한 기능을 알려 주시면 바로 반영할게요.
-                </p>
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3">
-                  <p className="text-[13.5px] font-bold text-neutral-900">선착순 20명 · 평생 무료</p>
+      <section className="border-t border-neutral-200">
+        <div className={section}>
+          <SectionHead eyebrow="FAQ" title="자주 묻는 질문" />
+          <Reveal as="ul" className="mt-10 border-b border-neutral-200">
+            {faqs.map((f, i) => {
+              const isOpen = openFaq === i;
+              return (
+                <li key={f.q} className="border-t border-neutral-200">
                   <button
                     type="button"
-                    onClick={onStart}
-                    className="whitespace-nowrap rounded-lg bg-emerald-600 px-4 py-2.5 text-[13px] font-bold text-white transition active:scale-95"
+                    onClick={() => setOpenFaq(isOpen ? -1 : i)}
+                    aria-expanded={isOpen}
+                    className="group flex w-full items-center justify-between gap-3 py-5 text-left"
                   >
-                    지금 자리 잡기
+                    <span className="text-[15px] font-semibold text-neutral-800 transition-colors duration-[180ms] group-hover:text-neutral-950">{f.q}</span>
+                    <ChevronDown
+                      size={18}
+                      className={"shrink-0 text-neutral-400 transition-transform " + (isOpen ? "rotate-180" : "")}
+                    />
                   </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
+                  {isOpen ? (
+                    <p className="animate-fade-up max-w-2xl pb-5 text-[14px] leading-[1.75] text-neutral-600">{f.a}</p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </Reveal>
         </div>
       </section>
 
-      <section className="mx-auto max-w-3xl px-5 py-14">
-        <h2 className="text-center text-[24px] font-bold tracking-tight text-neutral-900">자주 묻는 질문</h2>
-        <ul className={panelClass + " mt-8 divide-y divide-neutral-200 px-5"}>
-          {faqs.map((f, i) => {
-            const isOpen = openFaq === i;
-            return (
-              <li key={f.q}>
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(isOpen ? -1 : i)}
-                  aria-expanded={isOpen}
-                  className="flex w-full items-center justify-between gap-3 py-4 text-left"
-                >
-                  <span className="text-[14.5px] font-semibold text-neutral-900">{f.q}</span>
-                  <ChevronDown
-                    size={18}
-                    className={"shrink-0 text-neutral-400 transition-transform " + (isOpen ? "rotate-180" : "")}
-                  />
-                </button>
-                {isOpen ? (
-                  <p className="animate-fade-up pb-4 text-[13.5px] leading-relaxed text-neutral-600">{f.a}</p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-        <div className="mt-10 text-center">
-          <KakaoButton onClick={onStart} className="mx-auto">
+      <section className="border-t border-neutral-200">
+        <div className="mx-auto flex max-w-5xl flex-col items-start gap-5 px-5 py-14 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[22px] font-bold tracking-[-0.02em] text-neutral-900">오늘부터 카톡 대신 링크로 받아 보세요</p>
+            <p className="mt-1 text-[14px] text-neutral-500">가입 1분 · 손님은 가입 없이 바로 접수</p>
+          </div>
+          <KakaoButton onClick={onStart} className="w-full md:w-auto">
             카카오로 3초 만에 시작하기
           </KakaoButton>
         </div>
       </section>
 
-      <footer className="border-t border-neutral-200 py-8 text-center text-[12px] text-neutral-400">
-        <p className="text-[14px]"><RLWord /></p>
-        <p className="mt-2 flex justify-center">
-          <LegalLinks />
-        </p>
-        <p className="mt-2">© 2026 ReturnLink</p>
+      <footer className="border-t border-neutral-200">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-8 text-[12.5px] text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[15px]">
+            <RLWord />
+          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <LegalLinks />
+            <span>© 2026 ReturnLink</span>
+          </div>
+        </div>
       </footer>
     </div>
   );
@@ -7279,6 +7303,9 @@ function TrialBanner({ trialEndsAt }) {
 /* 사장님 화면: 틀                                                      */
 /* ------------------------------------------------------------------ */
 
+const headerBtn =
+  "flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-neutral-200 bg-white px-3 text-[13px] font-medium text-neutral-700 transition hover:border-neutral-400 hover:text-neutral-900 active:scale-[0.98]";
+
 export function AdminView({
   settings,
   requests,
@@ -7303,6 +7330,8 @@ export function AdminView({
   onDeleteAsk,
 }) {
   const [settingsTab, setSettingsTab] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
+  const closeHelp = useCallback(() => setHelpOpen(false), []);
   const [section, setSection] = useState("returns");
   const hasCs = !!onImportOrders;
   const returnTodo = requests.filter((r) => {
@@ -7329,10 +7358,13 @@ export function AdminView({
   return (
     <div>
       <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 lg:px-8">
-          <p className="flex items-baseline gap-2">
+        <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-x-2 gap-y-3 px-4 py-3 sm:min-h-[64px] lg:px-8">
+          <p className="mr-auto flex min-w-0 items-center gap-2.5">
+            {settings.logo ? (
+              <img src={settings.logo} alt="" className="h-8 w-8 shrink-0 rounded-full border border-neutral-200 object-cover" />
+            ) : null}
             <span
-              className="whitespace-nowrap text-[26px] leading-none tracking-tight text-neutral-900 lg:text-[30px]"
+              className="truncate text-[20px] leading-none tracking-tight text-neutral-900 sm:text-[22px]"
               style={{
                 fontFamily: fontOf(settings.font).family,
                 fontWeight: fontOf(settings.font).weight,
@@ -7340,49 +7372,37 @@ export function AdminView({
             >
               {settings.marketName}
             </span>
-            <span className="whitespace-nowrap text-[15px] font-medium text-neutral-700">어드민</span>
+            <span className="shrink-0 rounded border border-neutral-200 px-1.5 py-0.5 text-[11px] font-medium text-neutral-500">
+              관리자
+            </span>
           </p>
-          <span className="flex-1" />
           <button
             type="button"
             onClick={async () => {
               const ok = await copyText("https://" + shopLink(settings));
               showToast(ok ? "내 링크를 복사했어요" : "복사가 안 됐어요");
             }}
-            className="order-last flex w-full items-center gap-2 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[14px] text-neutral-800 sm:order-none sm:w-auto"
+            className="order-last flex h-9 w-full items-center gap-2 rounded-lg border border-neutral-200 bg-[#FAF8F5] px-3 text-[13px] text-neutral-700 transition hover:border-neutral-400 sm:order-none sm:w-auto sm:max-w-[320px]"
           >
-            <LinkIcon size={15} className="shrink-0" />
+            <LinkIcon size={14} className="shrink-0 text-neutral-400" />
             <span className="min-w-0 flex-1 truncate text-left">{shopLink(settings)}</span>
-            <span className="shrink-0 font-medium">[복사]</span>
+            <span className="shrink-0 font-semibold text-neutral-900">복사</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setSettingsTab("profile")}
-            aria-label="마켓 설정 열기"
-            className="flex shrink-0 items-center gap-1.5 text-neutral-600"
-          >
-            <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-neutral-200 bg-neutral-50">
-              {settings.logo ? (
-                <img src={settings.logo} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <User size={20} />
-              )}
-            </span>
-            <span className="text-[13px] font-medium">설정</span>
+          <button type="button" onClick={() => setHelpOpen(true)} className={headerBtn}>
+            <Lightbulb size={15} /> 도움말
+          </button>
+          <button type="button" onClick={() => setSettingsTab("profile")} className={headerBtn}>
+            <Settings size={15} /> 설정
           </button>
           {onLogout ? (
-            <button
-              type="button"
-              onClick={onLogout}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-[13px] font-medium text-neutral-700 transition active:scale-95"
-            >
-              <LogOut size={15} /> 로그아웃
+            <button type="button" onClick={onLogout} aria-label="로그아웃" className={headerBtn}>
+              <LogOut size={15} /> <span className="hidden sm:inline">로그아웃</span>
             </button>
           ) : null}
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1600px] px-4 pb-12 pt-5 lg:px-8">
+      <div className="mx-auto max-w-[1280px] px-4 pb-12 pt-5 lg:px-8">
         <TrialBanner trialEndsAt={trialEndsAt} />
         {!validKakaoUrl(settings.kakaoUrl) ? (
           <button
@@ -7398,11 +7418,11 @@ export function AdminView({
           </button>
         ) : null}
         {hasCs ? (
-          <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="관리 메뉴">
+          <div className="-mx-4 mb-5 flex gap-1 overflow-x-auto border-b border-neutral-200 px-4 lg:mx-0 lg:px-0" role="tablist" aria-label="관리 메뉴">
             {[
-              { id: "returns", label: "교환·반품", n: returnTodo, tone: "bg-red-500" },
-              { id: "orders", label: "주문·발송", n: shipWait, tone: "bg-orange-500" },
-              { id: "asks", label: "1:1 문의", n: askOpen, tone: "bg-red-500" },
+              { id: "returns", label: "교환·반품", n: returnTodo },
+              { id: "orders", label: "주문·발송", n: shipWait },
+              { id: "asks", label: "1:1 문의", n: askOpen },
             ].map((t) => (
               <button
                 key={t.id}
@@ -7411,12 +7431,23 @@ export function AdminView({
                 aria-selected={section === t.id}
                 onClick={() => setSection(t.id)}
                 className={
-                  "flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-[14px] font-semibold transition " +
-                  (section === t.id ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 bg-white text-neutral-700")
+                  "-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-[15px] transition " +
+                  (section === t.id
+                    ? "border-neutral-900 font-bold text-neutral-900"
+                    : "border-transparent font-medium text-neutral-500 hover:text-neutral-800")
                 }
               >
                 {t.label}
-                {t.n ? <span className={"rounded-full px-1.5 py-0.5 text-[11px] leading-none text-white " + t.tone}>{t.n}</span> : null}
+                {t.n ? (
+                  <span
+                    className={
+                      "flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11.5px] font-semibold " +
+                      (section === t.id ? "bg-neutral-900 text-white" : "bg-neutral-200 text-neutral-700")
+                    }
+                  >
+                    {t.n}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -7443,8 +7474,6 @@ export function AdminView({
           onUpdate={onUpdate}
           onDelete={onDelete}
           showToast={showToast}
-          openSettings={(t) => setSettingsTab(t)}
-          onFeedback={onFeedback}
         />
         )}
       </div>
@@ -7464,6 +7493,29 @@ export function AdminView({
           }}
           showToast={showToast}
         />
+      ) : null}
+
+      {helpOpen ? (
+        <Modal title="도움말" desc="처리 순서와 팁, 운영자에게 의견 보내기" onClose={closeHelp}>
+          <ol className="space-y-3">
+            {[
+              "내 링크를 복사해 인스타 프로필과 카톡 자동응답에 붙여요.",
+              "입금이 들어오면 입금 확인을, 판매자 부담 접수는 내용을 보고 접수 확인을 눌러요. 수거 단계로 넘어가요.",
+              "택배사에 회수를 접수하고, 상품이 도착하면 수거 완료를 눌러요.",
+              "교환품을 보내거나 환불한 뒤 버튼을 누르면 완료로 넘어가요.",
+              "잘못 눌렀다면 되돌리기로 한 단계 돌아가요.",
+              "상품·사유, 계좌·배송비, FAQ, 손님 화면 꾸미기는 상단 설정에서 바꿔요.",
+            ].map((t, i) => (
+              <li key={t} className="flex gap-3 text-[13.5px] leading-relaxed text-neutral-700">
+                <span className="w-5 shrink-0 font-semibold tabular-nums text-neutral-400">{i + 1}</span>
+                {t}
+              </li>
+            ))}
+          </ol>
+          <div className="border-t border-neutral-200 pt-4">
+            <FeedbackCard onFeedback={onFeedback} showToast={showToast} />
+          </div>
+        </Modal>
       ) : null}
 
       {settingsTab ? (
@@ -7736,7 +7788,7 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
 
       <main key={view} className="animate-fade-in">
         {view === "landing" ? (
-          <Landing onStart={() => switchView("start")} onDemo={() => switchView("customer")} />
+          <Landing onStart={() => switchView("start")} onDemo={() => switchView("customer")} headerSticky={false} />
         ) : view === "start" ? (
           <SignupFlow onFinish={finishSignup} onGo={switchView} showToast={showToast} />
         ) : view === "customer" ? (

@@ -6573,10 +6573,11 @@ function LandingHeader({ onStart, onDemo, top = "top-0" }) {
     };
   }, []);
 
+  // 흐림 효과(blur) 없이 반투명 배경만 써서 스크롤 중 그래픽 부담을 없앴어요
   const tone = dark
-    ? "border-white/10 bg-[#1C1B19]/85 backdrop-blur-md"
+    ? "border-white/10 bg-[rgba(28,27,25,0.94)]"
     : scrolled
-      ? "border-[#E5E2DC] bg-[#FAF8F5]/85 backdrop-blur-md"
+      ? "border-[#E5E2DC] bg-[rgba(250,248,245,0.94)]"
       : "border-transparent bg-transparent";
   const link =
     "hidden h-9 items-center rounded-lg px-3 text-[14px] font-medium md:flex " +

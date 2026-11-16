@@ -24,7 +24,8 @@ export default function SmoothScroll() {
     const start = () => {
       if (lenis || mq.matches) return;
       lenis = new Lenis({
-        lerp: 0.15,
+        lerp: 0.24,
+        wheelMultiplier: 1.1,
         smoothWheel: true,
         syncTouch: false,
         prevent: (node) => document.body.style.overflow === "hidden" || scrollableY(node),

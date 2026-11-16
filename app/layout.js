@@ -1,4 +1,5 @@
 import "./globals.css";
+import SmoothScroll from "../components/SmoothScroll";
 
 const SITE = "https://returnlinks.com";
 const TITLE = "ReturnLink | 1인 마켓 교환·반품 포털";
@@ -47,7 +48,10 @@ export default function RootLayout({ children }) {
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={BRAND_FONTS} />
       </head>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <SmoothScroll />
+        {children}
+      </body>
     </html>
   );
 }

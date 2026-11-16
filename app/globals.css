@@ -62,8 +62,9 @@ textarea {
   }
 }
 
+/* 탭 전환 등: 끝에서 부드럽게 안착하는 공통 곡선 */
 .animate-fade-up {
-  animation: fadeUp 0.35s ease-out both;
+  animation: fadeUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-toast {
@@ -76,6 +77,21 @@ textarea {
 
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out both;
+}
+
+/* Lenis 관성 스크롤 기본 스타일 */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -131,5 +147,38 @@ textarea {
   }
   100% {
     transform: translateX(0);
+  }
+}
+
+/* 랜딩 기능 카드: 커서 주변 테두리만 은은하게 (마우스일 때만) */
+.rl-spot {
+  position: relative;
+}
+.rl-spot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  background: radial-gradient(
+    200px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(22, 163, 74, 0.45),
+    rgba(22, 163, 74, 0) 70%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rl-spot:hover::after {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rl-spot::after {
+    transition: none;
   }
 }

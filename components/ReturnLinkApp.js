@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  CornerDownRight,
   CreditCard,
   Eye,
   EyeOff,
@@ -26,6 +27,7 @@ import {
   Inbox,
   Lightbulb,
   Link as LinkIcon,
+  ListChecks,
   LogOut,
   MapPin,
   MessageCircle,
@@ -6343,120 +6345,194 @@ function CountUp({ to, decimals = 0, duration = 1200, delay = 150 }) {
   );
 }
 
-const SHOWCASE = [
-  {
-    src: "/showcase/s1.webp",
-    tab: "엑셀·송장 조회",
-    alt: "택배사·스마트스토어 엑셀을 올리면 손님 주문 조회 화면에 송장번호가 자동으로 연결되는 모습",
-  },
-  {
-    src: "/showcase/s2.webp",
-    tab: "교환·반품",
-    alt: "손님이 상품과 옵션을 눌러 고르고, 왕복 배송비와 입금 계좌를 안내받는 교환 접수 화면",
-  },
-  {
-    src: "/showcase/s3.webp",
-    tab: "체크리스트",
-    alt: "사장님 화면에서 입금 확인, 수거 완료, 발송 완료를 버튼 하나로 처리하는 접수 목록",
-  },
-  {
-    src: "/showcase/s4.webp",
-    tab: "1:1 문의",
-    alt: "마켓 이름과 로고가 보이는 전용 1:1 문의 창구와 사장님 답변",
-  },
-];
+/* ------------------------------------------------------------------ */
+/* 랜딩 (히어로 → 문제 → 기능 → 화면 4탭 → 비교 → 시작 → FAQ)          */
+/* ------------------------------------------------------------------ */
 
-function Showcase() {
-  const [i, setI] = useState(0);
-  const [paused, setPaused] = useState(false);
+const LAND_ALT = "bg-[#EFECE6]";
+const DARK_BG = "bg-[#1C1B19]";
+const landBtn = "transition-colors duration-[180ms] motion-reduce:transition-none";
 
+function scrollToId(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+}
+
+// 줄 단위로 아래에서 올라오는 큰 제목
+function RevealLines({ lines, className = "" }) {
+  const [ref, seen] = useInViewOnce();
+  return (
+    <h2 ref={ref} className={className}>
+      {lines.map((ln, i) => (
+        <span key={i} className="block overflow-hidden pb-[0.06em]">
+          <span
+            className="block"
+            style={{
+              transform: seen ? "none" : "translateY(105%)",
+              transition: "transform 700ms " + EASE_OUT + " " + i * 60 + "ms",
+            }}
+          >
+            {ln}
+          </span>
+        </span>
+      ))}
+    </h2>
+  );
+}
+
+// 탭이 바뀔 때마다 살짝 올라오며 바뀌는 화면
+function SwapIn({ children, className = "" }) {
+  const [on, setOn] = useState(false);
   useEffect(() => {
-    if (paused || reducedMotion()) return undefined;
-    const t = setInterval(() => setI((v) => (v + 1) % SHOWCASE.length), 4500);
-    return () => clearInterval(t);
-  }, [paused, i]);
-
+    if (reducedMotion()) {
+      setOn(true);
+      return undefined;
+    }
+    const r = requestAnimationFrame(() => setOn(true));
+    return () => cancelAnimationFrame(r);
+  }, []);
   return (
     <div
-      className="mx-auto w-full max-w-[560px]"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
-      onBlur={() => setPaused(false)}
+      className={className}
+      style={{
+        opacity: on ? 1 : 0,
+        transform: on ? "none" : "translateY(12px)",
+        transition: "opacity 450ms " + EASE_OUT + ", transform 450ms " + EASE_OUT,
+      }}
     >
-      <div className="relative aspect-[1600/1060] overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-        {SHOWCASE.map((x, n) => (
-          <img
-            key={x.src}
-            src={x.src}
-            alt={n === i ? x.alt : ""}
-            aria-hidden={n !== i}
-            loading={n === 0 ? "eager" : "lazy"}
-            draggable={false}
-            className={
-              "absolute inset-0 h-full w-full object-cover transition-opacity duration-500 ease-out motion-reduce:transition-none " +
-              (n === i ? "opacity-100" : "opacity-0")
-            }
-          />
-        ))}
-      </div>
-
-      <div role="tablist" aria-label="미리보기 화면 고르기" className="mt-3 grid grid-cols-4 border-t border-neutral-200">
-        {SHOWCASE.map((x, n) => (
-          <button
-            key={x.src}
-            type="button"
-            role="tab"
-            aria-selected={n === i}
-            onClick={() => setI(n)}
-            className={
-              "-mt-px whitespace-nowrap border-t px-1 pb-1 pt-2.5 text-[12px] transition-colors duration-[180ms] sm:text-[13px] " +
-              (n === i
-                ? "border-neutral-900 font-semibold text-neutral-900"
-                : "border-transparent font-medium text-neutral-400 hover:text-neutral-700")
-            }
-          >
-            {x.tab}
-          </button>
-        ))}
-      </div>
+      {children}
     </div>
   );
 }
 
-function LandingHeader({ onStart, onDemo, sticky = true }) {
+function Eyebrow({ n, children, dark }) {
+  return (
+    <p className={"flex items-center gap-2 text-[13px] font-semibold " + (dark ? "text-emerald-400" : "text-emerald-700")}>
+      {n ? <span className="tabular-nums">{n}</span> : null}
+      {n ? <span className={"h-px w-4 " + (dark ? "bg-emerald-400/60" : "bg-emerald-700/50")} aria-hidden="true" /> : null}
+      {children}
+    </p>
+  );
+}
+
+function SectionHead({ n, eyebrow, title, desc, dark }) {
+  return (
+    <Reveal className="grid gap-4 md:grid-cols-[1.1fr_0.9fr] md:items-end md:gap-12">
+      <div>
+        <Eyebrow n={n} dark={dark}>
+          {eyebrow}
+        </Eyebrow>
+        <h2
+          className={
+            "mt-3 text-[26px] font-bold leading-[1.34] tracking-[-0.03em] md:text-[36px] " +
+            (dark ? "text-white" : "text-neutral-900")
+          }
+        >
+          {title}
+        </h2>
+      </div>
+      {desc ? (
+        <p className={"max-w-md text-[15px] leading-[1.8] " + (dark ? "text-white/60" : "text-neutral-500")}>{desc}</p>
+      ) : null}
+    </Reveal>
+  );
+}
+
+function LandingHeader({ onStart, onDemo, top = "top-0" }) {
   const [scrolled, setScrolled] = useState(false);
+  const [dark, setDark] = useState(false);
+  const hdrRef = useRef(null);
   useEffect(() => {
-    const on = () => setScrolled(window.scrollY > 16);
-    on();
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      setScrolled(window.scrollY > 16);
+      // 헤더 가운데 높이가 어두운 섹션 위에 있으면 헤더 색을 뒤집어요
+      const y = (hdrRef.current ? hdrRef.current.getBoundingClientRect().top : 0) + 28;
+      const over = [...document.querySelectorAll('[data-dark="true"]')].some((el) => {
+        const r = el.getBoundingClientRect();
+        return r.top <= y && r.bottom >= y;
+      });
+      setDark(over);
+    };
+    const on = () => {
+      if (!raf) raf = requestAnimationFrame(check);
+    };
+    check();
     window.addEventListener("scroll", on, { passive: true });
-    return () => window.removeEventListener("scroll", on);
+    window.addEventListener("resize", on);
+    return () => {
+      window.removeEventListener("scroll", on);
+      window.removeEventListener("resize", on);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
-  const go = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-  const link = "hidden h-9 items-center rounded-lg px-3 text-[14px] font-medium text-neutral-600 transition-colors duration-[180ms] hover:bg-black/[0.04] hover:text-neutral-900 sm:flex";
+
+  const tone = dark
+    ? "border-white/10 bg-[#1C1B19]/85 backdrop-blur-md"
+    : scrolled
+      ? "border-[#E5E2DC] bg-[#FAF8F5]/85 backdrop-blur-md"
+      : "border-transparent bg-transparent";
+  const link =
+    "hidden h-9 items-center rounded-lg px-3 text-[14px] font-medium md:flex " +
+    landBtn +
+    (dark ? " text-white/65 hover:bg-white/10 hover:text-white" : " text-neutral-600 hover:bg-black/[0.04] hover:text-neutral-900");
+
   return (
     <header
+      ref={hdrRef}
       className={
-        (sticky ? "sticky top-0 z-30 " : "") +
-        "border-b transition-[background-color,border-color,backdrop-filter] duration-300 ease-out motion-reduce:transition-none " +
-        (scrolled ? "border-[#E5E2DC] bg-[#FAF8F5]/85 backdrop-blur-md" : "border-transparent bg-transparent")
+        "sticky " +
+        top +
+        " " +
+        "z-30 border-b transition-[background-color,border-color] duration-300 ease-out motion-reduce:transition-none " +
+        tone
       }
     >
-      <div className="mx-auto flex h-14 max-w-5xl items-center gap-1 px-5">
-        <a href="/" className="mr-auto text-[18px] tracking-tight" aria-label="리턴링크 홈">
-          <RLWord />
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-5">
+        <a href="/" className="mr-auto flex items-center gap-2" aria-label="리턴링크 홈">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={"h-[22px] w-[22px] " + (dark ? "text-white" : "text-neutral-900")}
+            aria-hidden="true"
+          >
+            <path d="M20 12V8a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4h4" />
+            <path d="M14 16h6M17.5 13.5 20 16l-2.5 2.5" />
+          </svg>
+          <span className="text-[18px] font-extrabold tracking-tight">
+            <span className={dark ? "text-white" : "text-[#111827]"}>Return</span>
+            <span className="text-[#16A34A]">Link</span>
+          </span>
         </a>
-        <button type="button" onClick={() => go("features")} className={link}>
-          기능
-        </button>
+        <nav className="flex items-center" aria-label="주요 메뉴">
+          {[
+            ["features", "기능"],
+            ["screens", "화면"],
+            ["compare", "비교"],
+            ["faq", "자주 묻는 질문"],
+          ].map(([id, t]) => (
+            <button key={id} type="button" onClick={() => scrollToId(id)} className={link}>
+              {t}
+            </button>
+          ))}
+        </nav>
         {onDemo ? (
           <button
             type="button"
             onClick={onDemo}
-            className="flex h-9 items-center whitespace-nowrap rounded-lg px-3 text-[14px] font-medium text-neutral-600 transition-colors duration-[180ms] hover:bg-black/[0.04] hover:text-neutral-900"
+            className={
+              "ml-1 hidden h-9 items-center whitespace-nowrap rounded-lg border px-3 text-[13.5px] font-medium sm:flex " +
+              landBtn +
+              (dark
+                ? " border-white/25 text-white hover:border-white/60"
+                : " border-neutral-300 bg-white text-neutral-800 hover:border-neutral-900")
+            }
           >
             데모 체험
           </button>
@@ -6464,32 +6540,32 @@ function LandingHeader({ onStart, onDemo, sticky = true }) {
         <button
           type="button"
           onClick={onStart}
-          className="ml-1 flex h-9 items-center whitespace-nowrap rounded-lg bg-neutral-900 px-3.5 text-[13.5px] font-semibold text-white transition-colors duration-[180ms] hover:bg-neutral-700"
+          className={
+            "ml-1.5 flex h-9 items-center gap-1 whitespace-nowrap rounded-lg px-3.5 text-[13.5px] font-semibold " +
+            landBtn +
+            (dark ? " bg-white text-neutral-900 hover:bg-neutral-200" : " bg-neutral-900 text-white hover:bg-neutral-700")
+          }
         >
           시작하기
+          <ArrowRight size={14} strokeWidth={1.75} />
         </button>
       </div>
     </header>
   );
 }
 
-function SectionHead({ eyebrow, title, desc }) {
-  return (
-    <Reveal className="max-w-2xl">
-      {eyebrow ? <p className="text-[13px] font-semibold text-emerald-700">{eyebrow}</p> : null}
-      <h2 className="mt-2 text-[24px] font-bold leading-[1.35] tracking-[-0.02em] text-neutral-900 md:text-[28px]">
-        {title}
-      </h2>
-      {desc ? <p className="mt-2 text-[15px] leading-[1.7] text-neutral-500">{desc}</p> : null}
-    </Reveal>
-  );
-}
-
-function LandingStats() {
+/* ---------- 히어로 오른쪽: 이번 주 요약 ---------- */
+function HeroLedger() {
   const stats = [
-    { label: "이번 주 대신 받은 카톡", value: 32, unit: "건", sub: "접수와 손님 조회를 합친 수", Icon: MessageCircle },
-    { label: "아낀 CS 시간", value: 4.1, decimals: 1, unit: "시간", sub: "접수 1건 6분 · 조회 1회 2분 기준 추정", Icon: Clock },
-    { label: "지금 할 일", value: 12, unit: "건", chips: ["입금 4", "수거 5", "발송 3"], Icon: Box },
+    { label: "대신 받은 카톡", value: 32, unit: "건", cap: "접수·조회 합계", Icon: MessageCircle },
+    { label: "아낀 CS 시간", value: 4.1, decimals: 1, unit: "시간", cap: "1건 6분 기준", Icon: Clock },
+    { label: "지금 할 일", value: 12, unit: "건", cap: "오늘 처리할 접수", Icon: Box },
+  ];
+  const chips = [
+    ["입금 대기", 4, "border-neutral-900 text-neutral-900"],
+    ["수거", 5, "border-neutral-300 text-neutral-700"],
+    ["발송", 3, "border-neutral-300 text-neutral-700"],
+    ["완료", 20, "border-dashed border-neutral-300 text-neutral-400"],
   ];
   const rows = [
     {
@@ -6498,9 +6574,8 @@ function LandingStats() {
       kind: "jacket",
       product: "Classic Wool Jacket",
       option: "블랙 M → 블랙 L",
-      meta: "사이즈 불만족 · 배송비 6,000원 입금됨 · 방금 전",
-      action: "수거 완료",
-      primary: false,
+      meta: "사이즈 불만족 · 6,000원 입금됨",
+      when: "방금",
     },
     {
       name: "이서연",
@@ -6508,122 +6583,660 @@ function LandingStats() {
       kind: "pants",
       product: "Wide Denim Pants (M)",
       option: "",
-      meta: "단순 변심 · 배송비 6,000원 입금 전 · 12분 전",
-      action: "입금 확인",
-      primary: true,
+      meta: "단순 변심 · 입금 전",
+      when: "12분 전",
     },
   ];
   return (
-    <div className="mt-6 overflow-hidden rounded-2xl border border-neutral-200 bg-white" aria-label="사장님 화면 예시">
-      <div className="grid sm:grid-cols-3">
-        {stats.map((x, i) => (
-          <div
-            key={x.label}
-            className={"relative px-5 py-5 sm:px-6 " + (i ? "border-t border-neutral-200 sm:border-l sm:border-t-0" : "")}
-          >
-            <x.Icon size={20} strokeWidth={1.5} className="absolute right-5 top-5 text-neutral-400 sm:right-6" aria-hidden="true" />
-            <p className="pr-8 text-[13px] font-medium text-neutral-500">{x.label}</p>
-            <p className="mt-1.5 whitespace-nowrap text-[30px] font-bold leading-tight tracking-[-0.02em] text-neutral-900 tabular-nums">
-              <CountUp to={x.value} decimals={x.decimals || 0} />
-              <span className="ml-1 text-[16px] font-semibold text-neutral-700">{x.unit}</span>
-            </p>
-            {x.chips ? (
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {x.chips.map((c) => (
-                  <span
-                    key={c}
-                    className="rounded-md border border-neutral-200 bg-[#FAF8F5] px-2 py-0.5 text-[12px] font-medium text-neutral-700 tabular-nums"
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-[12.5px] text-neutral-500">{x.sub}</p>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="border-t border-neutral-200">
-        <div className="flex items-center gap-4 border-b border-neutral-200 px-5 text-[13.5px] sm:px-6">
-          <span className="-mb-px border-b-2 border-neutral-900 py-3 font-bold text-neutral-900">
-            전체 <span className="tabular-nums">28</span>
-          </span>
-          <span className="flex items-center gap-1.5 py-3 text-neutral-500">
-            확인·입금 대기
-            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-neutral-900 px-1.5 text-[11px] font-semibold text-white">
-              4
+    <div className="relative">
+      <span
+        aria-hidden="true"
+        className="absolute inset-0 translate-x-3 translate-y-3 rounded-[20px] border border-neutral-200 bg-[#EFECE6]"
+      />
+      <div
+        className="relative overflow-hidden rounded-[20px] border border-neutral-200 bg-white"
+        aria-label="사장님 화면 예시"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-5 py-3.5">
+          <p className="text-[13px] text-neutral-500">
+            <b className="font-semibold text-neutral-900">오트 스튜디오</b> · 이번 주
+          </p>
+          <span className="rounded-md border border-neutral-200 px-2 py-0.5 text-[11.5px] text-neutral-500">예시</span>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-neutral-200 border-b border-neutral-200">
+          {stats.map((x) => (
+            <div key={x.label} className="relative min-w-0 px-3 py-4 sm:px-5">
+              <x.Icon
+                size={17}
+                strokeWidth={1.5}
+                className="absolute right-3 top-4 hidden text-neutral-400 sm:block sm:right-4"
+                aria-hidden="true"
+              />
+              <p className="text-[12px] font-medium leading-snug text-neutral-500 sm:pr-6 sm:text-[12.5px]">{x.label}</p>
+              <p className="mt-1.5 whitespace-nowrap text-[23px] font-bold leading-tight tracking-[-0.02em] text-neutral-900 sm:text-[28px]">
+                <CountUp to={x.value} decimals={x.decimals || 0} />
+                <span className="ml-0.5 text-[13px] font-semibold text-neutral-600 sm:text-[15px]">{x.unit}</span>
+              </p>
+              <p className="mt-1 text-[11px] text-neutral-400 sm:text-[11.5px]">{x.cap}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-neutral-200 px-5 py-3">
+          <span className="mr-1 text-[12px] font-medium text-neutral-400">진행</span>
+          {chips.map(([t, n, c]) => (
+            <span key={t} className={"rounded-md border bg-white px-2 py-0.5 text-[12px] font-medium " + c}>
+              {t} <b className="font-semibold tabular-nums">{n}</b>
             </span>
-          </span>
-          <span className="hidden py-3 text-neutral-500 sm:inline">수거진행 5</span>
+          ))}
+        </div>
+        <div className="px-5 pt-3">
+          <p className="text-[12px] font-medium text-neutral-400">최근 접수</p>
         </div>
         {rows.map((r, i) => (
-          <div key={r.name} className={"flex items-center gap-3 px-5 py-3.5 sm:px-6 " + (i ? "border-t border-neutral-100" : "")}>
-            <Thumb kind={r.kind} size="h-11 w-11" />
+          <div key={r.name} className={"flex items-center gap-3 px-5 py-3 " + (i ? "border-t border-neutral-100" : "")}>
+            <Thumb kind={r.kind} size="h-10 w-10" />
             <div className="min-w-0 flex-1">
               <p className="flex items-center gap-1.5">
-                <span className="text-[14.5px] font-semibold text-neutral-900">{r.name}</span>
+                <span className="text-[14px] font-semibold text-neutral-900">{r.name}</span>
                 <TypeChip type={r.type} />
               </p>
-              <p className="truncate text-[13px] text-neutral-700">
+              <p className="truncate text-[12.5px] text-neutral-700">
                 {r.product}
                 {r.option ? <span className="text-neutral-500"> · {r.option}</span> : null}
               </p>
-              <p className="truncate text-[12px] text-neutral-400">{r.meta}</p>
+              <p className="truncate text-[11.5px] text-neutral-400">{r.meta}</p>
             </div>
-            <span
-              aria-hidden="true"
-              className={
-                "flex h-9 shrink-0 items-center whitespace-nowrap rounded-lg border px-3 text-[12.5px] font-semibold " +
-                (r.primary ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white text-neutral-900")
-              }
-            >
-              {r.action}
-            </span>
+            <span className="shrink-0 text-[11.5px] text-neutral-400">{r.when}</span>
           </div>
         ))}
+        <div className="mt-1 flex items-center justify-between gap-3 border-t border-dashed border-neutral-200 px-5 py-3">
+          <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-emerald-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(22,163,74,0.15)]" />
+            실시간
+          </span>
+          <p className="text-[11.5px] text-neutral-400">예시 화면이에요. 가입하면 내 접수가 이렇게 쌓여요.</p>
+        </div>
       </div>
     </div>
   );
 }
 
-function HeroMock() {
-  const sample = { type: "exchange", amount: 6000, paid: true, pickup: "progress", decision: null };
+/* ---------- 화면 4탭: 실제로 눌러 보는 미니 화면 ---------- */
+const mockBtn =
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold " +
+  landBtn;
+const mockBtnLine = mockBtn + " border-neutral-300 bg-white text-neutral-800 hover:border-neutral-900";
+const mockBtnInk = mockBtn + " border-neutral-900 bg-neutral-900 text-white hover:bg-neutral-700";
+
+function MockBar({ title, right }) {
   return (
-    <div className="relative mx-auto w-full max-w-sm">
-      <div className="absolute -right-3 -top-3 hidden rotate-3 rounded-2xl sm:block border border-neutral-200 bg-white p-4 opacity-60 shadow-card">
-        <p className="text-[12px] text-neutral-400">반품 접수 · 이서연</p>
-        <p className="mt-1 text-[13px] font-semibold text-neutral-700">Wide Denim Pants (M)</p>
+    <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3 sm:px-5">
+      <p className="flex min-w-0 items-center gap-2">
+        <span className="text-[14px] font-bold text-neutral-900">{title}</span>
+        <span className="hidden truncate text-[12px] text-neutral-400 sm:inline">오트 스튜디오</span>
+      </p>
+      {right ? (
+        <span className="shrink-0 rounded-md border border-neutral-200 px-2 py-0.5 text-[11.5px] text-neutral-500">{right}</span>
+      ) : null}
+    </div>
+  );
+}
+
+function OrdersMock({ onCopy }) {
+  const list = [
+    ["정다은", "2222", "Wide Denim Pants (S)", "발송 준비", "11/24(화) 예정"],
+    ["최유나", "3456", "Balloon Skirt (블랙 FREE)", "결제 확인", "-"],
+    ["박지호", "1234", "Linen Half Shirt (아이보리 L)", "결제 확인 전", "-"],
+    ["김민지", "5678", "Classic Wool Jacket (블랙 M)", "송장 나옴", "CJ 6890…"],
+  ];
+  const badge = (s) =>
+    s === "송장 나옴"
+      ? "bg-emerald-50 text-emerald-700"
+      : s === "결제 확인 전"
+        ? "border border-neutral-300 bg-white text-neutral-600"
+        : "bg-neutral-100 text-neutral-700";
+  return (
+    <div>
+      <MockBar title="주문 조회" right="예시" />
+      <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-neutral-200 bg-[#FAF8F5] px-3 py-2 text-[12.5px] text-neutral-400 sm:mx-5">
+        <Search size={14} strokeWidth={1.5} /> 이름, 뒤 4자리, 상품명으로 찾기
       </div>
-      <div className="relative rounded-2xl border border-neutral-200 bg-white p-5 shadow-card">
-        <div className="flex items-center justify-between">
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
-            새 교환 접수
-          </span>
-          <span className="text-[11px] text-neutral-400">방금 전</span>
+      <div className="px-4 pb-4 sm:px-5">
+        <div className="mt-2 hidden grid-cols-[72px_56px_minmax(0,1fr)_86px_96px] gap-3 border-b border-neutral-200 py-2 text-[11.5px] font-medium text-neutral-400 sm:grid">
+          <span>손님</span>
+          <span>뒤 4자리</span>
+          <span>상품</span>
+          <span>상태</span>
+          <span className="text-right">송장·발송</span>
         </div>
-        <div className="mt-3 flex items-center gap-3">
-          <Thumb kind="jacket" size="h-12 w-12" />
-          <div className="min-w-0">
-            <p className="truncate text-[14px] font-bold text-neutral-900">Classic Wool Jacket</p>
-            <p className="text-[12.5px] text-neutral-500">블랙 M → 블랙 L · 사이즈 교환</p>
+        {list.map(([n, p, prod, st, inv]) => (
+          <div
+            key={n}
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 border-b border-neutral-100 py-2.5 sm:grid-cols-[72px_56px_minmax(0,1fr)_86px_96px]"
+          >
+            <span className="text-[13px] font-semibold text-neutral-900">{n}</span>
+            <span className="hidden text-[12.5px] tabular-nums text-neutral-400 sm:block">{p}</span>
+            <span className="col-start-1 row-start-2 truncate text-[12.5px] text-neutral-600 sm:col-auto sm:row-auto">{prod}</span>
+            <span className={"col-start-2 row-start-1 justify-self-end whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11.5px] font-semibold sm:col-auto sm:row-auto sm:justify-self-start " + badge(st)}>
+              {st}
+            </span>
+            <span className="col-start-2 row-start-2 whitespace-nowrap text-right text-[11.5px] tabular-nums text-neutral-500 sm:col-auto sm:row-auto">
+              {inv}
+            </span>
+          </div>
+        ))}
+        <div className="mt-3 rounded-xl border border-neutral-200 bg-[#FAF8F5] p-3.5">
+          <div className="flex items-center justify-between gap-2 border-b border-neutral-200 pb-2.5">
+            <p className="truncate text-[13px] font-bold text-neutral-900">김민지 · Classic Wool Jacket (블랙 M)</p>
+            <span className="shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11.5px] font-semibold text-emerald-700">송장 나옴</span>
+          </div>
+          <ol className="mt-3 grid grid-cols-4">
+            {ORDER_STEPS.map((s, i) => (
+              <li key={s} className="relative flex flex-col items-center gap-1.5 text-center text-[11.5px] font-medium text-neutral-700">
+                {i < 3 ? <span className="absolute left-1/2 top-[9px] h-px w-full bg-emerald-500/60" aria-hidden="true" /> : null}
+                <span className="relative flex h-[18px] w-[18px] items-center justify-center rounded-full bg-emerald-500 text-white">
+                  <Check size={11} strokeWidth={2.5} />
+                </span>
+                {s}
+              </li>
+            ))}
+          </ol>
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2">
+            <span className="text-[12.5px] text-neutral-600">
+              CJ대한통운 <b className="font-semibold tabular-nums text-neutral-900">689012340001</b>
+            </span>
+            <button type="button" onClick={() => onCopy("689012340001")} className={mockBtnInk + " px-2.5 py-1"}>
+              <Copy size={12} strokeWidth={1.75} /> 복사
+            </button>
           </div>
         </div>
-        <p className="mt-3 text-[12px] text-neutral-500">김민지 · 010-2345-5678 · 배송비 입금 완료</p>
-        <div className="mt-4">
-          <Steps r={sample} />
+        <p className="mt-2.5 text-[12px] text-neutral-400">손님은 이름과 뒤 4자리만 넣으면 여기로 들어와요.</p>
+      </div>
+    </div>
+  );
+}
+
+function ChipGroup({ items, value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((t) => (
+        <button
+          key={t}
+          type="button"
+          aria-pressed={value === t}
+          onClick={() => onChange(t)}
+          className={
+            "rounded-full border px-3 py-1 text-[12.5px] font-medium " +
+            landBtn +
+            (value === t
+              ? " border-neutral-900 bg-neutral-900 text-white"
+              : " border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400")
+          }
+        >
+          {t}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ExchangeMock({ onCopy, onSubmit }) {
+  const [type, setType] = useState("교환");
+  const [from, setFrom] = useState({ c: "블랙", s: "M" });
+  const [to, setTo] = useState({ c: "블랙", s: "L" });
+  const [why, setWhy] = useState("사이즈 불만족");
+  const label = "mb-1.5 text-[12px] font-semibold text-neutral-500";
+  return (
+    <div>
+      <MockBar title="교환·반품 접수" right="1분 접수" />
+      <div className="grid gap-5 p-4 sm:p-5 md:grid-cols-[1.05fr_0.95fr]">
+        <div className="space-y-4">
+          <div>
+            <p className={label}>접수 유형</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ["교환", ArrowLeftRight],
+                ["반품", Undo2],
+              ].map(([t, I]) => (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={type === t}
+                  onClick={() => setType(t)}
+                  className={
+                    "flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-[13px] font-semibold " +
+                    landBtn +
+                    (type === t
+                      ? " border-neutral-900 bg-neutral-900 text-white"
+                      : " border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400")
+                  }
+                >
+                  <I size={15} strokeWidth={1.5} /> {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className={label}>상품</p>
+            <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-[13px] text-neutral-900">
+              Classic Wool Jacket <ChevronDown size={15} strokeWidth={1.5} className="text-neutral-400" />
+            </div>
+          </div>
+          <div className={"grid gap-2 " + (type === "교환" ? "sm:grid-cols-2" : "")}>
+            <div className="rounded-xl border border-neutral-200 p-3">
+              <p className="mb-2 text-[12px] font-semibold text-neutral-700">받으신 옵션</p>
+              <div className="space-y-1.5">
+                <ChipGroup items={["블랙", "차콜"]} value={from.c} onChange={(c) => setFrom({ ...from, c })} />
+                <ChipGroup items={["S", "M", "L"]} value={from.s} onChange={(s) => setFrom({ ...from, s })} />
+              </div>
+            </div>
+            {type === "교환" ? (
+              <div className="rounded-xl border border-neutral-200 p-3">
+                <p className="mb-2 text-[12px] font-semibold text-neutral-700">바꾸고 싶은 옵션</p>
+                <div className="space-y-1.5">
+                  <ChipGroup items={["블랙", "차콜"]} value={to.c} onChange={(c) => setTo({ ...to, c })} />
+                  <ChipGroup items={["S", "M", "L"]} value={to.s} onChange={(s) => setTo({ ...to, s })} />
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-neutral-200 bg-[#FAF8F5] p-3.5">
+            <div className="flex items-baseline justify-between">
+              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-neutral-800">
+                <Banknote size={15} strokeWidth={1.5} /> 왕복 택배비
+              </span>
+              <span className="text-[17px] font-bold tabular-nums text-emerald-700">6,000원</span>
+            </div>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-neutral-500">고객 사유 교환·반품은 배송비를 입금해야 접수가 진행돼요.</p>
+            <div className="mt-2.5 flex items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2">
+              <span className="min-w-0 text-[12.5px] leading-snug text-neutral-800">
+                카카오뱅크 <b className="font-semibold tabular-nums">3333-12-3456789</b>
+                <span className="block text-[11.5px] text-neutral-400">예금주 오트스튜디오</span>
+              </span>
+              <button type="button" onClick={() => onCopy("3333-12-3456789")} className={mockBtnInk + " shrink-0 px-2.5 py-1"}>
+                <Copy size={12} strokeWidth={1.75} /> 복사
+              </button>
+            </div>
+          </div>
+          <div>
+            <p className={label}>사유</p>
+            <ChipGroup items={["사이즈 불만족", "색상 차이", "단순 변심"]} value={why} onChange={setWhy} />
+          </div>
+          <button type="button" onClick={onSubmit} className={mockBtnInk + " w-full rounded-xl py-3 text-[14px]"}>
+            {type} 접수하기
+          </button>
+          <p className="text-[12px] text-neutral-400">
+            {type === "교환"
+              ? from.c + " " + from.s + " → " + to.c + " " + to.s + " · " + why
+              : from.c + " " + from.s + " · " + why}
+          </p>
         </div>
       </div>
     </div>
+  );
+}
+
+const CK_STAGES = ["확인·입금 대기", "수거 진행", "발송 준비", "완료"];
+const CK_ACTIONS = ["입금 확인", "수거 완료", "발송 완료"];
+const CK_START = [
+  { id: 1, name: "김민지", type: "exchange", kind: "jacket", prod: "Classic Wool Jacket · 블랙 M → 블랙 L", meta: "사이즈 불만족 · 6,000원 입금됨", st: 2 },
+  { id: 2, name: "이서연", type: "return", kind: "pants", prod: "Wide Denim Pants (M)", meta: "단순 변심 · 6,000원 입금 전", st: 0 },
+  { id: 3, name: "박준호", type: "exchange", kind: "shirt", prod: "Linen Half Shirt · 아이보리 S → M", meta: "사이즈 불만족 · 6,000원 입금됨", st: 1 },
+  { id: 4, name: "최유나", type: "return", kind: "skirt", prod: "Balloon Skirt (블랙 FREE)", meta: "상품 불량 · 배송비 없음", st: 3 },
+];
+
+function ChecklistMock() {
+  const [rows, setRows] = useState(CK_START);
+  const [filter, setFilter] = useState("all");
+  const [last, setLast] = useState(null);
+  const count = (k) => (k === "all" ? rows.length : rows.filter((r) => r.st === k).length);
+  const next = (r) => {
+    setRows(rows.map((x) => (x.id === r.id ? { ...x, st: x.st + 1 } : x)));
+    setLast({ id: r.id, name: r.name, from: r.st, undone: false });
+  };
+  const undo = () => {
+    if (!last) return;
+    setRows(rows.map((x) => (x.id === last.id ? { ...x, st: last.from } : x)));
+    setLast({ ...last, undone: true });
+  };
+  const shown = rows.filter((r) => filter === "all" || r.st === filter);
+  return (
+    <div>
+      <MockBar title="접수 관리" right="이번 주" />
+      <div className="flex gap-1 overflow-x-auto border-b border-neutral-200 px-3 sm:px-4" role="group" aria-label="단계별 보기">
+        {[["all", "전체"], ...CK_STAGES.map((t, i) => [i, t])].map(([k, t]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setFilter(k)}
+            className={
+              "-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-2 py-2.5 text-[12.5px] " +
+              landBtn +
+              (filter === k ? " border-neutral-900 font-bold text-neutral-900" : " border-transparent font-medium text-neutral-500 hover:text-neutral-800")
+            }
+          >
+            {t}
+            <span
+              className={
+                "flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-semibold tabular-nums " +
+                (filter === k ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600")
+              }
+            >
+              {count(k)}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="min-h-[260px] px-4 sm:px-5">
+        {shown.length ? (
+          shown.map((r, i) => (
+            <div key={r.id} className={"flex items-center gap-3 py-3 " + (i ? "border-t border-neutral-100" : "")}>
+              <Thumb kind={r.kind} size="h-10 w-10" />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5">
+                  <span className="text-[13.5px] font-semibold text-neutral-900">{r.name}</span>
+                  <TypeChip type={r.type} />
+                </p>
+                <p className="truncate text-[12.5px] text-neutral-700">{r.prod}</p>
+                <p className="truncate text-[11.5px] text-neutral-400">{r.meta}</p>
+              </div>
+              {r.st >= 3 ? (
+                <span className="flex shrink-0 items-center gap-1 text-[12.5px] font-semibold text-emerald-700">
+                  <Check size={14} strokeWidth={2} /> 완료
+                </span>
+              ) : (
+                <button type="button" onClick={() => next(r)} className={(r.st === 0 ? mockBtnInk : mockBtnLine) + " shrink-0"}>
+                  {CK_ACTIONS[r.st]}
+                </button>
+              )}
+            </div>
+          ))
+        ) : (
+          <p className="py-10 text-center text-[13px] text-neutral-400">이 단계에 남은 접수가 없어요</p>
+        )}
+      </div>
+      <div className="flex min-h-[46px] items-center justify-between gap-3 border-t border-dashed border-neutral-200 px-4 py-2.5 text-[12.5px] text-neutral-500 sm:px-5">
+        {last ? (
+          last.undone ? (
+            <span>
+              <b className="font-semibold text-neutral-900">{last.name}</b> · {CK_STAGES[last.from]}(으)로 되돌렸어요
+            </span>
+          ) : (
+            <>
+              <span className="min-w-0 truncate">
+                <b className="font-semibold text-neutral-900">{last.name}</b> · {CK_STAGES[last.from]} → {CK_STAGES[last.from + 1]}
+              </span>
+              <button type="button" onClick={undo} className={"flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold text-neutral-700 hover:bg-neutral-100 " + landBtn}>
+                <Undo2 size={13} strokeWidth={1.75} /> 되돌리기
+              </button>
+            </>
+          )
+        ) : (
+          <span>버튼을 누르면 다음 단계로 넘어가요.</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AskMock({ onSend }) {
+  const [text, setText] = useState("");
+  const [mine, setMine] = useState([]);
+  const send = () => {
+    const t = text.trim();
+    if (!t) return;
+    setMine([...mine, t]);
+    setText("");
+    onSend();
+  };
+  return (
+    <div>
+      <MockBar title="1:1 문의" right="답변 1" />
+      <div className="grid gap-3 p-4 sm:p-5 md:grid-cols-[0.8fr_1.2fr]">
+        <div className="flex flex-col items-center rounded-xl border border-neutral-200 bg-[#FAF8F5] p-4 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full border border-neutral-200 bg-white text-[18px] font-bold text-neutral-900">
+            오
+          </span>
+          <p className="mt-2 text-[15px] font-bold text-neutral-900">오트 스튜디오</p>
+          <p className="mt-0.5 text-[12px] text-neutral-500">매일 입고 싶은 편안함을 만들어요.</p>
+          <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[11.5px] font-semibold text-emerald-700">
+            <ShieldCheck size={12} strokeWidth={1.75} /> 공식 안심 CS 센터
+          </span>
+          <div className="mt-3 grid w-full grid-cols-4 gap-1.5">
+            {[
+              ["주문 조회", Package],
+              ["교환·반품", ArrowLeftRight],
+              ["FAQ", Lightbulb],
+              ["1:1 문의", MessageCircle],
+            ].map(([t, I]) => (
+              <span
+                key={t}
+                className={
+                  "flex flex-col items-center gap-1 rounded-lg border bg-white px-0.5 py-2 text-[10.5px] font-medium " +
+                  (t === "1:1 문의" ? "border-neutral-900 text-neutral-900" : "border-neutral-200 text-neutral-500")
+                }
+              >
+                <I size={15} strokeWidth={1.5} />
+                <span className="whitespace-nowrap">{t}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="rounded-xl border border-neutral-200 bg-white p-3.5">
+            <p className="text-[11.5px] text-neutral-400">11/16 13:20 · 손님</p>
+            <p className="mt-1 text-[13px] text-neutral-900">입금자명을 엄마 이름(이정희)으로 보냈어요!</p>
+            <div className="mt-2.5 rounded-lg bg-emerald-50/70 p-3">
+              <p className="flex items-center gap-1 text-[12px] font-semibold text-emerald-700">
+                <CornerDownRight size={13} strokeWidth={1.75} /> 사장님 답변
+              </p>
+              <p className="mt-1 text-[13px] leading-relaxed text-neutral-700">
+                확인했어요! 이정희 님 이름으로 입금된 것 확인했고, 내일 바로 보내 드릴게요 :)
+              </p>
+            </div>
+          </div>
+          {mine.map((t, i) => (
+            <SwapIn key={i}>
+              <div className="rounded-xl border border-neutral-200 bg-[#FAF8F5] p-3.5">
+                <p className="text-[11.5px] text-neutral-400">방금 · 손님</p>
+                <p className="mt-1 break-words text-[13px] text-neutral-800">{t}</p>
+              </div>
+            </SwapIn>
+          ))}
+          <div className="mt-auto flex items-center gap-2 rounded-xl border border-neutral-200 bg-white p-1.5 pl-3">
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value.slice(0, 80))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) send();
+              }}
+              placeholder="답글을 남겨 보세요"
+              aria-label="예시 답글"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-neutral-900 outline-none placeholder:text-neutral-400"
+            />
+            <button type="button" onClick={send} className={mockBtnInk}>
+              보내기
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SCREEN_TABS = [
+  {
+    tab: "엑셀·송장 조회",
+    key: "손님 화면 · 주문 조회",
+    title: ["엑셀 한 번이면", "송장이 손님 화면에"],
+    desc: "택배사·스마트스토어 주문 엑셀을 올리면 주문과 송장이 손님 조회 화면에 그대로 붙어요. “언제 와요?” 카톡이 줄어요.",
+    points: ["엑셀 업로드 한 번으로 주문·송장 반영", "이름과 뒤 4자리로 들어오는 손님 조회", "송장번호는 복사해서 바로 전달"],
+    cap: "주문 조회 화면 · 송장 카드는 복사 버튼이 실제로 동작해요",
+  },
+  {
+    tab: "교환·반품",
+    key: "손님 화면 · 교환 접수",
+    title: ["손님은 1분이면", "접수 끝"],
+    desc: "상품과 옵션을 누르고 사유만 고르면 돼요. 왕복 배송비와 계좌는 화면에 자동으로 안내돼요.",
+    points: ["접수 유형·상품·옵션·사유를 한 화면에서", "계좌번호 복사, 입금자명만 입력", "접수하면 바로 사장님 체크리스트에"],
+    cap: "교환 접수 화면 · 옵션을 눌러 보세요",
+  },
+  {
+    tab: "체크리스트",
+    key: "사장님 화면 · 체크리스트",
+    title: ["입금·수거·발송,", "버튼 하나로"],
+    desc: "들어온 접수가 단계별로 정리돼요. 버튼을 누르면 다음 단계로 넘어가고, 잘못 눌렀으면 되돌려요.",
+    points: ["확인·입금 대기 / 수거 진행 / 발송 준비 / 완료", "한 번 누르면 다음 단계로", "방금 누른 단계는 되돌리기"],
+    cap: "접수 관리 화면 · 버튼과 되돌리기가 실제로 동작해요",
+  },
+  {
+    tab: "1:1 문의",
+    key: "손님 화면 · 1:1 문의",
+    title: ["문의는 대화에", "묻히지 않아요"],
+    desc: "입금자명·옵션 변경 같은 문의가 내 마켓 화면 안에 남아요. 사장님 답변도 같은 곳에서 확인해요.",
+    points: ["마켓 이름·로고로 꾸민 전용 창구", "문의와 답변이 한곳에", "주문 조회·교환·FAQ로 이어지는 탭"],
+    cap: "1:1 문의 화면 · 답글을 직접 남겨 보세요",
+  },
+];
+
+function ScreensSection({ onToast }) {
+  const [i, setI] = useState(0);
+  const tabRefs = useRef([]);
+  const go = (n, focus) => {
+    const k = (n + SCREEN_TABS.length) % SCREEN_TABS.length;
+    setI(k);
+    if (focus && tabRefs.current[k]) tabRefs.current[k].focus();
+  };
+  const copy = async (t) => {
+    const ok = await copyText(t);
+    onToast(ok ? "복사했어요 · " + t : "복사가 안 됐어요");
+  };
+  const cur = SCREEN_TABS[i];
+  return (
+    <section id="screens" className="scroll-mt-14 border-t border-neutral-200">
+      <div className="mx-auto max-w-6xl px-5 py-16 md:py-24">
+        <SectionHead
+          n="03"
+          eyebrow="화면"
+          title="실제 화면 그대로 눌러 보세요"
+          desc="네 개 탭이 손님 화면과 사장님 화면으로 이어져요. 버튼은 실제로 동작해요."
+        />
+        <Reveal delay={60} className="mt-10">
+          <div className="flex gap-1 overflow-x-auto border-b border-neutral-200" role="tablist" aria-label="화면 미리보기 고르기">
+            {SCREEN_TABS.map((t, n) => (
+              <button
+                key={t.tab}
+                ref={(el) => (tabRefs.current[n] = el)}
+                type="button"
+                role="tab"
+                id={"scr-tab-" + n}
+                aria-selected={n === i}
+                aria-controls="scr-panel"
+                tabIndex={n === i ? 0 : -1}
+                onClick={() => go(n)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight") {
+                    e.preventDefault();
+                    go(n + 1, true);
+                  } else if (e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    go(n - 1, true);
+                  }
+                }}
+                className={
+                  "-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-[14px] sm:px-4 " +
+                  landBtn +
+                  (n === i
+                    ? " border-neutral-900 font-bold text-neutral-900"
+                    : " border-transparent font-medium text-neutral-400 hover:text-neutral-700")
+                }
+              >
+                <span className="hidden text-[12px] tabular-nums text-neutral-400 sm:inline">{pad(n + 1)}</span>
+                {t.tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-8 pt-8 md:grid-cols-[0.72fr_1.28fr] md:gap-10">
+            <div className="md:sticky md:top-20 md:self-start">
+              <SwapIn key={"copy-" + i}>
+                <p className="text-[12.5px] font-semibold text-neutral-400">{cur.key}</p>
+                <h3 className="mt-2 text-[22px] font-bold leading-[1.4] tracking-[-0.025em] text-neutral-900 md:text-[26px]">
+                  {cur.title[0]}
+                  <br />
+                  {cur.title[1]}
+                </h3>
+                <p className="mt-3 text-[14.5px] leading-[1.8] text-neutral-500">{cur.desc}</p>
+                <ul className="mt-5 border-t border-neutral-200">
+                  {cur.points.map((p) => (
+                    <li key={p} className="flex gap-2 border-b border-neutral-200 py-2.5 text-[13.5px] text-neutral-700">
+                      <Check size={15} strokeWidth={1.75} className="mt-[3px] shrink-0 text-emerald-600" />
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+              </SwapIn>
+              <div className="mt-5 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => go(i - 1)}
+                  aria-label="이전 화면"
+                  className={"flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-900 hover:text-neutral-900 " + landBtn}
+                >
+                  <ChevronLeft size={17} strokeWidth={1.5} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => go(i + 1)}
+                  aria-label="다음 화면"
+                  className={"flex h-10 w-10 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-700 hover:border-neutral-900 hover:text-neutral-900 " + landBtn}
+                >
+                  <ChevronRight size={17} strokeWidth={1.5} />
+                </button>
+                <span className="relative h-[3px] max-w-[120px] flex-1 overflow-hidden rounded-full bg-neutral-200" aria-hidden="true">
+                  <span
+                    className="absolute inset-y-0 left-0 rounded-full bg-neutral-900"
+                    style={{ width: ((i + 1) / SCREEN_TABS.length) * 100 + "%", transition: "width 450ms " + EASE_OUT }}
+                  />
+                </span>
+                <span className="text-[12.5px] tabular-nums text-neutral-400">
+                  <b className="font-semibold text-neutral-900">{pad(i + 1)}</b> / {pad(SCREEN_TABS.length)}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <div className="rounded-[20px] border border-neutral-200 bg-[#EFECE6] p-2 sm:p-3">
+                <div id="scr-panel" role="tabpanel" aria-labelledby={"scr-tab-" + i} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+                  <SwapIn key={"scr-" + i}>
+                    {i === 0 ? <OrdersMock onCopy={copy} /> : null}
+                    {i === 1 ? (
+                      <ExchangeMock onCopy={copy} onSubmit={() => onToast("예시 화면이라 실제로 접수되진 않아요")} />
+                    ) : null}
+                    {i === 2 ? <ChecklistMock /> : null}
+                    {i === 3 ? <AskMock onSend={() => onToast("예시라 저장되진 않아요")} /> : null}
+                  </SwapIn>
+                </div>
+              </div>
+              <p className="mt-2.5 flex justify-between gap-3 text-[12px] text-neutral-400">
+                <span>{cur.cap}</span>
+                <span className="shrink-0">예시 데이터</span>
+              </p>
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </section>
   );
 }
 
 const LANDING_FEATURES = [
-  { t: "교환·반품 접수", d: "손님이 상품·옵션·사유를 골라 접수하고, 배송비 안내와 입금까지 한 번에 끝내요." },
-  { t: "주문·발송 조회", d: "엑셀로 주문과 송장을 올리면 손님이 결제 확인부터 송장까지 직접 확인해요." },
-  { t: "1:1 문의", d: "카톡 대신 문의를 남기고, 사장님 답변을 같은 화면에서 확인해요." },
-  { t: "단계별 체크리스트", d: "입금 확인 → 수거 → 발송·환불을 버튼 하나로 넘기고, 잘못 누르면 되돌려요." },
+  { t: "교환·반품 접수", d: "상품·옵션·사유를 고르면 배송비 안내와 입금까지 한 번에. 다시 물어볼 것 없이 정보가 들어와요.", Icon: ArrowLeftRight },
+  { t: "주문·발송 조회", d: "택배사·스마트스토어 엑셀을 올리면 손님이 결제 확인부터 송장까지 직접 봐요.", Icon: Package },
+  { t: "1:1 문의", d: "카톡 대신 문의를 남기고, 답변을 같은 화면에서 확인해요. 문의가 대화에 묻히지 않아요.", Icon: MessageCircle },
+  { t: "단계별 체크리스트", d: "입금 확인 → 수거 → 발송·환불을 버튼 하나로 넘기고, 잘못 눌렀으면 되돌려요.", Icon: ListChecks },
 ];
 
 const LANDING_COMPARE = [
@@ -6631,195 +7244,461 @@ const LANDING_COMPARE = [
   { k: "계좌·배송비", kakao: "계좌번호와 배송비를 매번 복사해 보내요", rl: "손님 화면에 자동으로 안내돼요" },
   { k: "입금 확인", kakao: "대화를 뒤져서 입금했는지 찾아요", rl: "입금·수거·발송을 한 화면에서 체크해요" },
   { k: "진행 문의", kakao: "“언제 와요?”에 계속 답장해요", rl: "손님이 진행 상황을 직접 조회해요" },
+  { k: "기록", kakao: "대화가 쌓여도 남는 접수 기록이 없어요", rl: "접수와 답변이 내 마켓에 남아요" },
 ];
 
-export function Landing({ onStart, onDemo, headerSticky = true }) {
-  const [openFaq, setOpenFaq] = useState(-1);
-  const faqs = [
-    {
-      q: "손님도 가입해야 하나요?",
-      a: "아니요. 손님은 사장님 링크를 눌러 바로 접수해요. 가입이나 앱 설치가 필요 없어요.",
-    },
-    {
-      q: "새 접수가 오면 어떻게 알 수 있나요?",
-      a: "사장님 화면에 할 일 개수가 바로 보여요. 새 접수 카카오톡 알림은 준비 중이에요.",
-    },
-    {
-      q: "손님 개인정보는 안전한가요?",
-      a: "접수 때 동의를 받고, 처리가 끝난 건은 90일 뒤 자동으로 지워져요. 다른 사장님은 내 접수를 볼 수 없어요.",
-    },
-    {
-      q: "그만 쓰고 싶으면요?",
-      a: "사장님 화면 설정에서 언제든 탈퇴할 수 있어요. 탈퇴하면 마켓 정보와 접수 기록이 모두 바로 지워져요.",
-    },
-  ];
-  const section = "mx-auto max-w-5xl px-5 py-16 md:py-20";
+const LANDING_FAQS = [
+  { q: "손님도 가입해야 하나요?", a: "아니요. 손님은 사장님 링크를 눌러 바로 접수해요. 가입도, 앱 설치도 필요 없어요." },
+  { q: "새 접수가 오면 어떻게 알 수 있나요?", a: "사장님 화면에 할 일 개수가 바로 올라가요. 새 접수 카카오톡 알림은 준비 중이에요." },
+  {
+    q: "손님 개인정보는 안전한가요?",
+    a: "접수할 때 동의를 받고, 처리가 끝난 건은 90일 뒤 자동으로 지워져요. 다른 사장님은 내 접수를 볼 수 없어요.",
+  },
+  {
+    q: "그만 쓰고 싶으면요?",
+    a: "사장님 화면 설정에서 언제든 탈퇴할 수 있어요. 탈퇴하면 마켓 정보와 접수 기록이 모두 바로 지워져요.",
+  },
+];
+
+function FaqItem({ q, a, open, onToggle, id }) {
+  return (
+    <li className="border-b border-neutral-200">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={id}
+        className="group flex w-full items-center justify-between gap-4 py-5 text-left"
+      >
+        <span className={"text-[15.5px] font-semibold text-neutral-800 group-hover:text-neutral-950 " + landBtn}>{q}</span>
+        <span className="relative h-3 w-3 shrink-0 text-neutral-500" aria-hidden="true">
+          <span className="absolute left-0 right-0 top-1/2 h-[1.5px] -translate-y-1/2 rounded-full bg-current" />
+          <span
+            className="absolute bottom-0 left-1/2 top-0 w-[1.5px] -translate-x-1/2 rounded-full bg-current"
+            style={{ transform: open ? "scaleY(0)" : "none", transition: "transform 450ms " + EASE_OUT }}
+          />
+        </span>
+      </button>
+      <div
+        id={id}
+        role="region"
+        className="grid"
+        style={{
+          gridTemplateRows: open ? "1fr" : "0fr",
+          transition: reducedMotion() ? "none" : "grid-template-rows 450ms " + EASE_OUT,
+        }}
+      >
+        <div className="overflow-hidden">
+          <p className="max-w-2xl pb-5 pr-6 text-[14.5px] leading-[1.85] text-neutral-600">{a}</p>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+export function Landing({ onStart, onDemo, headerTop = "top-0" }) {
+  const [openFaq, setOpenFaq] = useState(0);
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef(null);
+  const showToast = useCallback((t) => {
+    setToast(t);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 1900);
+  }, []);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  const wrap = "mx-auto max-w-6xl px-5";
 
   return (
-    <div className="bg-[#F5F4F1]">
-      <LandingHeader onStart={onStart} onDemo={onDemo} sticky={headerSticky} />
+    <div className="bg-[#F5F4F1] text-neutral-900">
+      <LandingHeader onStart={onStart} onDemo={onDemo} top={headerTop} />
 
-      <section className="mx-auto grid max-w-5xl items-center gap-10 px-5 pb-16 pt-10 md:grid-cols-[1fr_1.05fr] md:pb-20 md:pt-16">
-        <Reveal>
-          <p className="text-[13px] font-semibold text-emerald-700">인스타 1인 마켓을 위한 CS 포털</p>
-          <h1 className="mt-3 text-[30px] font-bold leading-[1.3] tracking-[-0.03em] text-neutral-900 md:text-[42px]">
-            반품·교환 카톡,
-            <br />
-            이제 링크 하나로 받으세요
-          </h1>
-          <p className="mt-4 max-w-md text-[15.5px] leading-[1.75] text-neutral-600">
-            손님은 링크에서 1분 만에 접수하고, 사장님은 입금·수거·발송을 체크리스트로 관리해요. 카톡으로 하나하나
-            주고받을 필요가 없어요.
-          </p>
-          <div className="mt-7 flex flex-col gap-2 sm:flex-row">
+      {/* 히어로 */}
+      <section className={wrap + " grid items-center gap-12 pb-16 pt-10 md:grid-cols-[1.02fr_1fr] md:gap-14 md:pb-24 md:pt-16"}>
+        <div>
+          <Reveal>
+            <Eyebrow>인스타 1인 마켓을 위한 CS 포털</Eyebrow>
+          </Reveal>
+          <Reveal delay={60}>
+            <h1 className="mt-4 text-[32px] font-bold leading-[1.28] tracking-[-0.035em] text-neutral-900 md:text-[48px]">
+              반품·교환 카톡,
+              <br />
+              이제 <span className="underline decoration-emerald-500/60 decoration-[3px] underline-offset-[8px]">링크 하나</span>로
+              받으세요
+            </h1>
+          </Reveal>
+          <Reveal delay={120}>
+            <p className="mt-5 max-w-md text-[15.5px] leading-[1.8] text-neutral-600">
+              손님은 링크에서 1분 만에 접수하고, 사장님은 입금·수거·발송을 체크리스트로 처리해요.
+            </p>
+          </Reveal>
+          <Reveal delay={180} className="mt-7 flex flex-col gap-2 sm:flex-row">
             <KakaoButton onClick={onStart}>카카오로 3초 만에 시작하기</KakaoButton>
             {onDemo ? (
               <button
                 type="button"
                 onClick={onDemo}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-6 py-4 text-[15px] font-semibold text-neutral-900 transition-colors duration-[180ms] hover:border-neutral-900 hover:bg-[#FAF8F5]"
+                className={
+                  "flex items-center justify-center gap-1.5 rounded-xl border border-neutral-300 bg-white px-6 py-4 text-[15px] font-semibold text-neutral-900 hover:border-neutral-900 hover:bg-[#FAF8F5] " +
+                  landBtn
+                }
               >
                 데모 체험하기
-                <ArrowRight size={16} />
+                <ArrowRight size={16} strokeWidth={1.75} />
               </button>
             ) : null}
-          </div>
-          <p className="mt-3 text-[12.5px] text-neutral-500">완전 무료 · 카드 등록 없음</p>
-        </Reveal>
-        <Reveal delay={60}>
-          <Showcase />
+          </Reveal>
+          <Reveal delay={240}>
+            <p className="mt-3 flex flex-wrap items-center gap-x-2 text-[12.5px] text-neutral-500">
+              <span>완전 무료</span>
+              <span className="h-2.5 w-px bg-neutral-300" aria-hidden="true" />
+              <span>카드 등록 없음</span>
+              <span className="h-2.5 w-px bg-neutral-300" aria-hidden="true" />
+              <span>손님은 가입 없이</span>
+            </p>
+          </Reveal>
+          <Reveal delay={300}>
+            <ul className="mt-8 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-neutral-200 pt-5 sm:grid-cols-4">
+              {[
+                [Clock, "1분 접수"],
+                [User, "손님 가입 없음"],
+                [ListChecks, "3단계 체크"],
+                [LinkIcon, "링크 1개"],
+              ].map(([I, t]) => (
+                <li key={t} className="flex items-center gap-2 text-[13px] font-medium text-neutral-700">
+                  <I size={16} strokeWidth={1.5} className="shrink-0 text-neutral-400" />
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </div>
+        <Reveal delay={120}>
+          <HeroLedger />
         </Reveal>
       </section>
 
-      <section id="features" className="scroll-mt-14 border-t border-neutral-200">
-        <div className={section}>
-          <SectionHead
-            eyebrow="기능"
-            title="카톡으로 하던 CS를 한곳에서"
-            desc="손님은 링크 하나로 접수·조회·문의를 하고, 사장님은 쌓인 일을 단계별로 처리해요."
-          />
-          <ul className="mt-10 grid gap-x-10 sm:grid-cols-2">
-            {LANDING_FEATURES.map((f, i) => (
-              <Reveal as="li" key={f.t} delay={i * 60} className="flex gap-4 border-t border-neutral-200 py-5">
-                <span className="w-6 shrink-0 pt-0.5 text-[13px] font-semibold tabular-nums text-neutral-400">
-                  {pad(i + 1)}
-                </span>
-                <div>
-                  <p className="text-[16px] font-bold tracking-[-0.01em] text-neutral-900">{f.t}</p>
-                  <p className="mt-1 text-[14px] leading-[1.7] text-neutral-500">{f.d}</p>
-                </div>
+      {/* 01 문제 */}
+      <section id="about" className="scroll-mt-14 border-t border-neutral-200">
+        <div className={wrap + " py-16 md:py-24"}>
+          <div className="grid gap-8 md:grid-cols-[1.35fr_1fr] md:items-end md:gap-12">
+            <div>
+              <Reveal>
+                <Eyebrow n="01">문제</Eyebrow>
               </Reveal>
+              <RevealLines
+                className="mt-4 text-[32px] font-bold leading-[1.3] tracking-[-0.035em] text-neutral-900 md:text-[52px]"
+                lines={[
+                  "카톡은 대화고,",
+                  <>
+                    접수는 <span className="text-neutral-400">기록</span>이에요.
+                  </>,
+                ]}
+              />
+            </div>
+            <Reveal delay={120}>
+              <p className="text-[15px] leading-[1.85] text-neutral-600">
+                누가 어떤 옵션을 왜 보냈는지, 입금은 됐는지, 송장은 나갔는지. 대화를 위로 올려 찾는 대신 한 화면에서 봐요.
+                손님도 같은 화면에서 진행 상황을 직접 확인해요.
+              </p>
+              <p className="mt-5 flex items-center gap-1.5 border-t border-neutral-200 pt-4 text-[13px] font-semibold text-neutral-500">
+                <Check size={15} strokeWidth={1.75} className="text-emerald-600" /> DM 없이, 대화 없이
+              </p>
+            </Reveal>
+          </div>
+          <Reveal as="nav" delay={60} aria-label="페이지 목차" className="mt-12 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+            {[
+              ["02", "기능", "features", "4가지"],
+              ["03", "화면", "screens", "탭 4개 · 직접 눌러 보기"],
+              ["04", "카톡과 비교", "compare", "5가지"],
+              ["05", "시작하기", "start", "1분"],
+              ["06", "자주 묻는 질문", "faq", "4개"],
+            ].map(([n, t, id, s], k) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => scrollToId(id)}
+                className={
+                  "group grid w-full grid-cols-[36px_minmax(0,1fr)_auto_18px] items-center gap-3 px-5 py-4 text-left hover:bg-[#FAF8F5] " +
+                  landBtn +
+                  (k ? " border-t border-neutral-200" : "")
+                }
+              >
+                <span className="text-[12.5px] tabular-nums text-neutral-400">{n}</span>
+                <span className="text-[15.5px] font-semibold text-neutral-900">{t}</span>
+                <span className="hidden text-[12.5px] text-neutral-400 sm:inline">{s}</span>
+                <ArrowRight size={15} strokeWidth={1.5} className={"text-neutral-300 group-hover:text-neutral-900 " + landBtn} />
+              </button>
             ))}
-          </ul>
-          <Reveal className="mt-12">
-            <p className="text-[15px] font-bold text-neutral-900">사장님 화면에서는 이렇게 보여요</p>
-            <LandingStats />
-            <p className="mt-3 text-[12px] text-neutral-400">예시 화면이에요. 가입하면 내 접수와 조회가 이렇게 쌓여요.</p>
           </Reveal>
         </div>
       </section>
 
-      <section className="border-t border-neutral-200">
-        <div className={section}>
-          <SectionHead eyebrow="비교" title="카톡으로 받을 때와 무엇이 다른가요" />
-          <Reveal className="mt-10 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-            <div className="hidden grid-cols-[160px_1fr_1fr] border-b border-neutral-200 bg-[#FAF8F5] text-[13px] font-semibold md:grid">
+      {/* 02 기능 */}
+      <section id="features" className={"scroll-mt-14 border-t border-neutral-200 " + LAND_ALT}>
+        <div className={wrap + " py-16 md:py-24"}>
+          <SectionHead
+            n="02"
+            eyebrow="기능"
+            title={
+              <>
+                카톡으로 하던 CS를
+                <br />
+                한곳에서
+              </>
+            }
+            desc="손님은 링크 하나로 접수·조회·문의를 하고, 사장님은 쌓인 일을 단계별로 처리해요."
+          />
+          <div className="mt-10 grid overflow-hidden rounded-2xl border border-neutral-200 bg-white sm:grid-cols-2">
+            {LANDING_FEATURES.map((f, i) => (
+              <Reveal
+                key={f.t}
+                delay={i * 60}
+                className={
+                  "p-6 sm:p-7 " +
+                  (i ? "border-t border-neutral-200 " : "") +
+                  (i === 1 ? "sm:border-t-0 " : "") +
+                  (i % 2 ? "sm:border-l sm:border-neutral-200" : "")
+                }
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700">
+                    <f.Icon size={19} strokeWidth={1.5} />
+                  </span>
+                  <span className="text-[12.5px] tabular-nums text-neutral-400">{pad(i + 1)}</span>
+                </div>
+                <h3 className="mt-4 text-[17px] font-bold tracking-[-0.015em] text-neutral-900">{f.t}</h3>
+                <p className="mt-1.5 text-[14px] leading-[1.8] text-neutral-500">{f.d}</p>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 03 화면 */}
+      <ScreensSection onToast={showToast} />
+
+      {/* 04 비교 */}
+      <section id="compare" className={"scroll-mt-14 border-t border-neutral-200 " + LAND_ALT}>
+        <div className={wrap + " py-16 md:py-24"}>
+          <SectionHead
+            n="04"
+            eyebrow="비교"
+            title={
+              <>
+                카톡으로 받을 때와
+                <br />
+                무엇이 다른가요
+              </>
+            }
+            desc="하는 일은 같아요. 대화를 뒤지지 않고, 같은 정보를 두 번 묻지 않는다는 것만 달라요."
+          />
+          <div className="mt-10 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+            <div className="hidden grid-cols-[150px_1fr_1fr] border-b border-neutral-200 bg-[#FAF8F5] text-[13px] font-semibold md:grid">
               <span className="px-6 py-3.5 text-neutral-500">항목</span>
               <span className="px-6 py-3.5 text-neutral-500">카톡으로 받으면</span>
               <span className="px-6 py-3.5 text-neutral-900">리턴링크를 쓰면</span>
             </div>
             {LANDING_COMPARE.map((row, i) => (
-              <div
+              <Reveal
                 key={row.k}
-                className={"grid gap-1.5 px-5 py-4 md:grid-cols-[160px_1fr_1fr] md:gap-0 md:px-0 md:py-0 " + (i ? "border-t border-neutral-200" : "")}
+                delay={i * 60}
+                className={
+                  "grid gap-1.5 px-5 py-4 hover:bg-[#FAF8F5] md:grid-cols-[150px_1fr_1fr] md:gap-0 md:px-0 md:py-0 " +
+                  landBtn +
+                  (i ? " border-t border-neutral-200" : "")
+                }
               >
                 <span className="text-[13px] font-semibold text-neutral-900 md:px-6 md:py-4 md:text-[14px]">{row.k}</span>
                 <span className="flex gap-2 text-[14px] leading-[1.6] text-neutral-400 md:px-6 md:py-4">
-                  <X size={15} className="mt-[3px] shrink-0" />
+                  <X size={15} strokeWidth={1.5} className="mt-[3px] shrink-0" />
                   {row.kakao}
                 </span>
                 <span className="flex gap-2 text-[14px] font-medium leading-[1.6] text-neutral-900 md:px-6 md:py-4">
-                  <Check size={15} strokeWidth={2.5} className="mt-[3px] shrink-0 text-emerald-600" />
+                  <Check size={15} strokeWidth={1.75} className="mt-[3px] shrink-0 text-emerald-600" />
                   {row.rl}
                 </span>
-              </div>
+              </Reveal>
             ))}
-          </Reveal>
+          </div>
         </div>
       </section>
 
-      <section className="border-t border-neutral-200">
-        <div className={section}>
-          <SectionHead eyebrow="시작하기" title="시작은 1분이면 돼요" />
-          <ol className="mt-10 grid gap-8 md:grid-cols-3">
+      {/* 05 시작 (어두운 섹션: 헤더가 반전돼요) */}
+      <section id="start" data-dark="true" className={"scroll-mt-14 text-white " + DARK_BG}>
+        <div className={wrap + " py-16 md:py-24"}>
+          <SectionHead
+            dark
+            n="05"
+            eyebrow="시작"
+            title={
+              <>
+                시작은
+                <br />
+                1분이면 돼요
+              </>
+            }
+            desc="카카오로 가입하고 마켓 이름·계좌·배송비만 적으면 링크가 생겨요. 카드 등록은 없어요."
+          />
+          <ol className="mt-10 grid gap-3 md:grid-cols-3">
             {[
-              { t: "가입하고 내 링크 만들기", d: "카카오로 가입하고 마켓 이름, 계좌, 배송비만 적으면 내 링크가 생겨요." },
-              { t: "인스타 프로필에 붙이기", d: "프로필 링크와 카톡 자동응답에 붙여 두면 손님이 알아서 들어와요." },
-              { t: "접수 오면 체크만", d: "입금 확인, 수거 완료, 발송 완료를 차례로 누르면 끝이에요." },
-            ].map((s, i) => (
-              <Reveal as="li" key={s.t} delay={i * 60} className="border-t-2 border-neutral-900 pt-4">
-                <span className="text-[13px] font-semibold tabular-nums text-emerald-700">STEP {pad(i + 1)}</span>
-                <p className="mt-2 text-[17px] font-bold tracking-[-0.01em] text-neutral-900">{s.t}</p>
-                <p className="mt-1.5 text-[14px] leading-[1.7] text-neutral-500">{s.d}</p>
+              [Store, "가입하고 내 링크 만들기", "카카오로 가입하고 마켓 이름, 계좌, 배송비만 적으면 내 링크가 생겨요."],
+              [LinkIcon, "인스타 프로필에 붙이기", "프로필 링크와 카톡 자동응답에 붙여 두면 손님이 알아서 들어와요."],
+              [ListChecks, "접수 오면 체크만", "입금 확인, 수거 완료, 발송 완료를 차례로 누르면 끝이에요."],
+            ].map(([I, t, d], i) => (
+              <Reveal
+                as="li"
+                key={t}
+                delay={i * 60}
+                className={"rounded-2xl border border-white/10 bg-white/[0.03] p-6 hover:border-white/25 hover:bg-white/[0.06] " + landBtn}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[12.5px] font-semibold tabular-nums text-emerald-400">STEP {pad(i + 1)}</span>
+                  <I size={18} strokeWidth={1.5} className="text-white/40" />
+                </div>
+                <p className="mt-3 text-[17px] font-bold tracking-[-0.015em]">{t}</p>
+                <p className="mt-1.5 text-[14px] leading-[1.8] text-white/55">{d}</p>
               </Reveal>
             ))}
           </ol>
-        </div>
-      </section>
-
-      <section className="border-t border-neutral-200">
-        <div className={section}>
-          <SectionHead eyebrow="FAQ" title="자주 묻는 질문" />
-          <Reveal as="ul" className="mt-10 border-b border-neutral-200">
-            {faqs.map((f, i) => {
-              const isOpen = openFaq === i;
-              return (
-                <li key={f.q} className="border-t border-neutral-200">
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaq(isOpen ? -1 : i)}
-                    aria-expanded={isOpen}
-                    className="group flex w-full items-center justify-between gap-3 py-5 text-left"
-                  >
-                    <span className="text-[15px] font-semibold text-neutral-800 transition-colors duration-[180ms] group-hover:text-neutral-950">{f.q}</span>
-                    <ChevronDown
-                      size={18}
-                      className={"shrink-0 text-neutral-400 transition-transform " + (isOpen ? "rotate-180" : "")}
-                    />
-                  </button>
-                  {isOpen ? (
-                    <p className="animate-fade-up max-w-2xl pb-5 text-[14px] leading-[1.75] text-neutral-600">{f.a}</p>
-                  ) : null}
-                </li>
-              );
-            })}
+          <Reveal delay={120} className="mt-10 flex flex-col gap-5 border-t border-white/15 pt-8 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-[21px] font-bold tracking-[-0.02em]">오늘부터 카톡 대신 링크로</p>
+              <p className="mt-1 text-[13.5px] text-white/50">가입 1분 · 손님은 가입 없이 바로 접수</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <KakaoButton onClick={onStart}>카카오로 3초 만에 시작하기</KakaoButton>
+              {onDemo ? (
+                <button
+                  type="button"
+                  onClick={onDemo}
+                  className={"rounded-xl border border-white/25 px-6 py-4 text-[15px] font-semibold text-white hover:border-white/60 hover:bg-white/10 " + landBtn}
+                >
+                  데모 체험하기
+                </button>
+              ) : null}
+            </div>
           </Reveal>
         </div>
       </section>
 
-      <section className="border-t border-neutral-200">
-        <div className="mx-auto flex max-w-5xl flex-col items-start gap-5 px-5 py-14 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-[22px] font-bold tracking-[-0.02em] text-neutral-900">오늘부터 카톡 대신 링크로 받아 보세요</p>
-            <p className="mt-1 text-[14px] text-neutral-500">가입 1분 · 손님은 가입 없이 바로 접수</p>
+      {/* 06 FAQ */}
+      <section id="faq" className="scroll-mt-14">
+        <div className={wrap + " py-16 md:py-24"}>
+          <SectionHead n="06" eyebrow="자주 묻는 질문" title="가입 전에 많이 물어봐요" />
+          <div className="mt-10 grid gap-8 md:grid-cols-[0.75fr_1.25fr] md:gap-12">
+            <Reveal className="h-fit rounded-2xl border border-neutral-200 bg-white p-6">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700">
+                <Eye size={19} strokeWidth={1.5} />
+              </span>
+              <p className="mt-4 text-[16px] font-bold text-neutral-900">먼저 둘러보고 싶다면</p>
+              <p className="mt-1.5 text-[14px] leading-[1.8] text-neutral-500">
+                가입 없이 데모에서 손님 화면과 사장님 화면을 그대로 눌러 볼 수 있어요.
+              </p>
+              {onDemo ? (
+                <button
+                  type="button"
+                  onClick={onDemo}
+                  className={"mt-4 inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3.5 py-2 text-[13.5px] font-semibold text-neutral-900 hover:border-neutral-900 hover:bg-[#FAF8F5] " + landBtn}
+                >
+                  데모 열기 <ArrowRight size={14} strokeWidth={1.75} />
+                </button>
+              ) : null}
+            </Reveal>
+            <Reveal as="ul" delay={60} className="border-t border-neutral-900">
+              {LANDING_FAQS.map((f, i) => (
+                <FaqItem
+                  key={f.q}
+                  id={"faq-a-" + i}
+                  q={f.q}
+                  a={f.a}
+                  open={openFaq === i}
+                  onToggle={() => setOpenFaq(openFaq === i ? -1 : i)}
+                />
+              ))}
+            </Reveal>
           </div>
-          <KakaoButton onClick={onStart} className="w-full md:w-auto">
-            카카오로 3초 만에 시작하기
-          </KakaoButton>
         </div>
       </section>
 
-      <footer className="border-t border-neutral-200">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-5 py-8 text-[12.5px] text-neutral-500 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[15px]">
-            <RLWord />
+      {/* 푸터 (어두운 영역) */}
+      <footer data-dark="true" className={"text-white " + DARK_BG}>
+        <div className={wrap + " pt-14"}>
+          <div className="grid gap-8 sm:grid-cols-[1.4fr_1fr_1fr]">
+            <div>
+              <p className="text-[18px] font-extrabold tracking-tight">
+                Return<span className="text-[#16A34A]">Link</span>
+              </p>
+              <p className="mt-3 max-w-xs text-[13.5px] leading-[1.8] text-white/50">
+                인스타 1인 마켓의 반품·교환 CS를 링크 하나로 받는 포털이에요.
+              </p>
+            </div>
+            <div>
+              <p className="text-[12.5px] font-semibold text-white/40">제품</p>
+              <ul className="mt-3 space-y-2 text-[14px] text-white/70">
+                <li>
+                  <button type="button" onClick={() => scrollToId("features")} className={"hover:text-white " + landBtn}>
+                    기능
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => scrollToId("screens")} className={"hover:text-white " + landBtn}>
+                    화면
+                  </button>
+                </li>
+                {onDemo ? (
+                  <li>
+                    <button type="button" onClick={onDemo} className={"hover:text-white " + landBtn}>
+                      데모 체험
+                    </button>
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+            <div>
+              <p className="text-[12.5px] font-semibold text-white/40">안내</p>
+              <ul className="mt-3 space-y-2 text-[14px] text-white/70">
+                <li>
+                  <button type="button" onClick={() => scrollToId("compare")} className={"hover:text-white " + landBtn}>
+                    카톡과 비교
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => scrollToId("start")} className={"hover:text-white " + landBtn}>
+                    시작하기
+                  </button>
+                </li>
+                <li>
+                  <button type="button" onClick={() => scrollToId("faq")} className={"hover:text-white " + landBtn}>
+                    자주 묻는 질문
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p
+            aria-hidden="true"
+            className="mt-12 select-none overflow-hidden whitespace-nowrap text-[17vw] font-extrabold leading-[0.9] tracking-[-0.04em] text-white/[0.05] sm:text-[120px]"
+          >
+            ReturnLink
           </p>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <LegalLinks />
+          <div className="flex flex-col gap-3 border-t border-white/10 py-6 text-[12.5px] text-white/45 sm:flex-row sm:items-center sm:justify-between">
             <span>© 2026 ReturnLink</span>
+            <LegalLinks className="text-white/60" />
           </div>
         </div>
       </footer>
+
+      <div
+        role="status"
+        aria-live="polite"
+        className={
+          "pointer-events-none fixed bottom-6 left-1/2 z-50 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-2 rounded-full bg-neutral-900 px-4 py-2.5 text-[13px] font-medium text-white transition-[opacity,transform] duration-300 motion-reduce:transition-none " +
+          (toast ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0")
+        }
+      >
+        <Check size={14} strokeWidth={2} className="shrink-0 text-emerald-400" />
+        <span className="truncate">{toast}</span>
+      </div>
     </div>
   );
 }
@@ -7788,7 +8667,7 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
 
       <main key={view} className="animate-fade-in">
         {view === "landing" ? (
-          <Landing onStart={() => switchView("start")} onDemo={() => switchView("customer")} headerSticky={false} />
+          <Landing onStart={() => switchView("start")} onDemo={() => switchView("customer")} headerTop="top-[57px]" />
         ) : view === "start" ? (
           <SignupFlow onFinish={finishSignup} onGo={switchView} showToast={showToast} />
         ) : view === "customer" ? (

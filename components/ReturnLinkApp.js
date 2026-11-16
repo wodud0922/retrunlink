@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeftRight,
@@ -537,15 +538,15 @@ function transition(r, action, extra) {
     return r.paid
       ? {
           patch: { paid: false, pickup: "none", pickupDate: "" },
-          message: r.name + "님 건을 입금확인대기로 되돌렸어요",
+          message: r.name + "님 건을 " + (r.amount > 0 ? "입금확인대기" : "확인 대기") + "로 되돌렸어요",
         }
       : {
           patch: { paid: true, pickup: "progress" },
-          message: r.name + "님 입금 확인 · 수거진행으로 옮겼어요",
+          message: r.name + "님 " + (r.amount > 0 ? "입금 확인" : "접수 확인") + " · 수거진행으로 옮겼어요",
         };
   }
   if (action === "next") {
-    if (st === "waiting") return { message: "배송비 입금 토글을 먼저 켜 주세요" };
+    if (st === "waiting") return { message: r.amount > 0 ? "배송비 입금 확인을 먼저 켜 주세요" : "접수 확인을 먼저 켜 주세요" };
     if (st === "progress")
       return {
         patch: { pickup: "done", pickupDate: stamp().date },
@@ -794,7 +795,7 @@ function Steps({ r }) {
   const doneCount = { waiting: 1, progress: 2, arrived: 3, done: 4, rejected: 1 }[st];
   const labels = [
     "접수",
-    r.amount > 0 ? "입금 확인" : "배송비 무료",
+    r.amount > 0 ? "입금 확인" : "사장님 확인",
     "상품 수거",
     r.type === "exchange" ? "교환품 발송" : "환불 완료",
   ];
@@ -950,8 +951,15 @@ function Modal({ title, desc, onClose, footer, children, z = "z-50" }) {
     };
   }, [onClose]);
 
-  return (
-    <div className={"fixed inset-0 flex items-end justify-center sm:items-center sm:p-4 " + z}>
+  if (typeof document === "undefined") return null;
+  // 모달은 body 바로 아래에 그려서, 위쪽 고정 탭바나 애니메이션 상자 아래로 깔리지 않게 해요.
+  return createPortal(
+    <div
+      className={
+        "fixed inset-0 flex items-end justify-center pt-[max(16px,env(safe-area-inset-top))] sm:items-center sm:p-4 sm:pt-6 " +
+        (z === "z-[60]" ? "z-[110]" : "z-[100]")
+      }
+    >
       <div
         className="animate-fade-in absolute inset-0 bg-black/40"
         onClick={onClose}
@@ -961,7 +969,7 @@ function Modal({ title, desc, onClose, footer, children, z = "z-50" }) {
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="animate-sheet relative flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+        className="animate-sheet relative flex max-h-[calc(100dvh-24px)] w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-2xl sm:max-h-[calc(100dvh-48px)] sm:rounded-2xl"
       >
         <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-5">
           <div>
@@ -979,10 +987,124 @@ function Modal({ title, desc, onClose, footer, children, z = "z-50" }) {
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto px-5 pb-4">{children}</div>
         {footer ? (
-          <div className="flex items-center gap-2 border-t border-neutral-200 px-5 py-4">{footer}</div>
+          <div className="flex items-center gap-2 border-t border-neutral-200 px-5 py-4 pb-[max(16px,env(safe-area-inset-bottom))]">{footer}</div>
         ) : null}
       </div>
+    </div>,
+    document.body
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 이용약관 · 개인정보 처리방침                                          */
+/* ------------------------------------------------------------------ */
+
+// 운영자 연락처: 이메일이 정해지면 여기에 적어 주세요. 비어 있으면 '피드백'으로 문의하라고 안내해요.
+const LEGAL = { service: "리턴링크(ReturnLink)", site: "returnlinks.com", email: "", updated: "2026년 11월 16일" };
+
+function LegalBody({ kind }) {
+  const contact = LEGAL.email
+    ? "이메일 " + LEGAL.email
+    : "사장님 화면의 '운영자에게 피드백' 또는 사이트 안내 채널";
+  const H = ({ children }) => <h3 className="mt-4 text-[14px] font-bold text-neutral-900">{children}</h3>;
+  const P = ({ children }) => <p className="mt-1.5 text-[13px] leading-relaxed text-neutral-700">{children}</p>;
+  if (kind === "terms") {
+    return (
+      <div>
+        <P>시행일: {LEGAL.updated}</P>
+        <H>제1조 (목적)</H>
+        <P>
+          이 약관은 {LEGAL.service}(이하 &lsquo;서비스&rsquo;)가 제공하는 주문 조회·교환·반품 접수 및 관리 기능의 이용 조건과 절차를
+          정해요.
+        </P>
+        <H>제2조 (이용자)</H>
+        <P>
+          &lsquo;사장님&rsquo;은 카카오 계정으로 가입해 자신의 접수 링크를 만들고 운영하는 판매자예요. &lsquo;손님&rsquo;은 사장님의 링크에서
+          주문을 조회하거나 교환·반품·문의를 남기는 사람이에요.
+        </P>
+        <H>제3조 (서비스 내용과 요금)</H>
+        <P>
+          서비스는 접수 화면과 관리 화면을 제공해요. 판매, 결제, 택배 접수는 서비스가 하지 않으며 사장님이 이용하는 판매 채널과 택배사에서
+          이뤄져요. 현재 모든 기능은 무료예요.
+        </P>
+        <H>제4조 (사장님의 책임)</H>
+        <P>
+          사장님은 손님에게 교환·반품 기준, 배송비, 입금 계좌 등을 정확하게 안내해야 하고, 손님 개인정보를 접수 처리 목적으로만 써야 해요.
+          교환·반품의 승인, 환불, 배송비 정산은 사장님과 손님 사이의 일이에요.
+        </P>
+        <H>제5조 (금지 행위)</H>
+        <P>타인의 정보 도용, 허위 접수, 서비스 방해, 법령에 어긋나는 상품·안내를 올리는 행위는 금지돼요. 위반하면 이용이 제한될 수 있어요.</P>
+        <H>제6조 (서비스 변경·중단)</H>
+        <P>
+          점검이나 장애로 서비스가 잠시 멈출 수 있어요. 중요한 변경이 있으면 사이트에 미리 알려요. 서비스 운영자는 고의나 중대한 과실이 없는 한
+          사장님과 손님 사이의 거래로 생긴 손해를 책임지지 않아요.
+        </P>
+        <H>제7조 (탈퇴)</H>
+        <P>사장님은 설정에서 언제든 탈퇴할 수 있고, 탈퇴하면 마켓 정보와 접수 기록이 함께 지워져요.</P>
+        <H>문의</H>
+        <P>{contact}</P>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <P>시행일: {LEGAL.updated}</P>
+      <P>
+        {LEGAL.service}는 개인정보 보호법에 따라 이용자의 개인정보를 아래와 같이 처리해요. 손님이 사장님 링크에 남긴 정보는 해당 사장님(판매자)이
+        교환·반품·주문 문의를 처리하려고 받는 정보이고, 서비스는 사장님을 대신해 저장·처리해요.
+      </P>
+      <H>1. 처리하는 항목</H>
+      <P>사장님: 카카오 계정 이메일·닉네임, 마켓 이름, 입금 계좌 등 사장님이 직접 입력한 정보</P>
+      <P>
+        손님: 성함, 휴대폰 번호, 교환·반품 상품과 사유, (선택) 회수 주소·사진·상세 내용, (반품 시) 환불 계좌, 입금자명, 1:1 문의 내용
+      </P>
+      <P>주문 조회: 사장님이 올린 주문의 받는 분 이름, 전화번호 뒤 4자리, 상품명, 택배사·송장번호</P>
+      <H>2. 이용 목적</H>
+      <P>교환·반품 접수와 처리, 주문·배송 상태 안내, 문의 답변, 서비스 운영과 부정 이용 방지</P>
+      <H>3. 보관 기간</H>
+      <P>
+        교환·반품 접수는 처리가 끝난 날부터 {KEEP_DAYS}일, 주문·송장과 1:1 문의는 등록한 날부터 {KEEP_DAYS}일이 지나면 자동으로 지워져요. 사장님이
+        탈퇴하면 관련 정보는 바로 지워져요. 법령에 따라 보관해야 하는 경우는 그 기간 동안 보관해요.
+      </P>
+      <H>4. 처리 위탁 및 국외 이전</H>
+      <P>
+        서비스 운영을 위해 아래 업체에 처리를 맡겨요. Supabase Inc.(데이터 저장, 서버 위치: 일본 도쿄 리전), Vercel Inc.(웹사이트 호스팅,
+        미국 등), 카카오(사장님 로그인). 정보는 서비스 이용 시점에 암호화된 통신으로 전송돼요.
+      </P>
+      <H>5. 제3자 제공</H>
+      <P>손님 정보는 해당 사장님에게만 보이며, 법령에 따른 요청 외에는 다른 곳에 제공하지 않아요.</P>
+      <H>6. 이용자의 권리</H>
+      <P>
+        손님은 접수한 마켓의 사장님에게 열람·정정·삭제를 요청할 수 있어요. 사장님은 관리 화면에서 접수를 직접 수정·삭제할 수 있어요. 서비스
+        운영자에게도 요청할 수 있어요.
+      </P>
+      <H>7. 안전성 확보 조치</H>
+      <P>접근 권한 제한(사장님은 자기 마켓 정보만 조회), 암호화 통신(HTTPS), 보관 기간이 지난 정보 자동 삭제</P>
+      <H>8. 개인정보 보호책임자 및 문의</H>
+      <P>{LEGAL.service} 운영자 · {contact}</P>
     </div>
+  );
+}
+
+function LegalLinks({ className = "" }) {
+  const [open, setOpen] = useState("");
+  return (
+    <>
+      <span className={"inline-flex items-center gap-3 " + className}>
+        <button type="button" onClick={() => setOpen("terms")} className="underline-offset-2 hover:underline">
+          이용약관
+        </button>
+        <span aria-hidden="true">·</span>
+        <button type="button" onClick={() => setOpen("privacy")} className="font-semibold underline-offset-2 hover:underline">
+          개인정보 처리방침
+        </button>
+      </span>
+      {open ? (
+        <Modal title={open === "terms" ? "이용약관" : "개인정보 처리방침"} onClose={() => setOpen("")}>
+          <LegalBody kind={open} />
+        </Modal>
+      ) : null}
+    </>
   );
 }
 
@@ -1547,8 +1669,11 @@ function RequestForm({ settings, onSubmit, showToast, onTrack }) {
     const next = {};
     if (!form.name.trim()) next.name = "주문자 성함을 입력해 주세요.";
     if (!/^01\d{8,9}$/.test(digits)) next.phone = "휴대폰 번호를 정확히 입력해 주세요.";
-    if (form.pickupMethod === "other" && !form.address.trim())
-      next.address = "상품을 가져갈 주소를 입력해 주세요.";
+    if (form.pickupMethod === "other") {
+      const a = form.address.trim();
+      if (!a) next.address = form.addressDetail.trim() ? "도로명 주소도 입력해 주세요. 상세 주소만으로는 회수가 어려워요." : "상품을 가져갈 주소를 입력해 주세요.";
+      else if (a.length < 6 || /^도로명\s*주소$/.test(a)) next.address = "회수할 실제 주소를 입력해 주세요. 예) 서울시 동대문구 이문로 107";
+    }
     const items = [...cart];
     if (itemStarted || cart.length === 0) {
       const res = checkItem();
@@ -1591,8 +1716,8 @@ function RequestForm({ settings, onSubmit, showToast, onTrack }) {
       depositor: amount > 0 ? form.depositor.trim() || form.name.trim() : "",
       detail: form.detail.trim(),
       amount,
-      paid: amount === 0,
-      pickup: amount === 0 ? "progress" : "none",
+      paid: false,
+      pickup: "none",
       pickupDate: "",
       courier: "CJ대한통운",
       decision: null,
@@ -1997,7 +2122,7 @@ function RequestForm({ settings, onSubmit, showToast, onTrack }) {
                 <input
                   value={form.address}
                   onChange={(e) => set({ address: e.target.value })}
-                  placeholder="도로명 주소"
+                  placeholder="예) 서울시 동대문구 이문로 107"
                   autoComplete="street-address"
                   className={inputClass}
                 />
@@ -2005,7 +2130,7 @@ function RequestForm({ settings, onSubmit, showToast, onTrack }) {
               <input
                 value={form.addressDetail}
                 onChange={(e) => set({ addressDetail: e.target.value })}
-                placeholder="상세 주소 (동·호수)"
+                placeholder="상세 주소 (예: 101동 202호)"
                 aria-label="상세 주소"
                 className={inputClass}
               />
@@ -2326,7 +2451,12 @@ function MyRequests({ fetchLookup, settings, lookup, setLookup, showToast, secti
                         </button>
                       </div>
                     ) : null}
-                    {st === "waiting" ? (
+                    {st === "waiting" && !(r.amount > 0) ? (
+                      <p className="mt-2 rounded-lg bg-neutral-50 px-3 py-2.5 text-[12.5px] text-neutral-600">
+                        사장님이 접수 내용을 확인하고 있어요. 확인되면 수거가 시작돼요.
+                      </p>
+                    ) : null}
+                    {st === "waiting" && r.amount > 0 ? (
                       <button
                         type="button"
                         onClick={async () => {
@@ -2357,6 +2487,21 @@ const COURIER_NAMES = ["CJ대한통운", "롯데택배", "한진택배", "우체
 
 function onlyDigits(s) {
   return String(s == null ? "" : s).replace(/\D/g, "");
+}
+
+
+// 송장번호 검사: 숫자만, 보통 10~13자리(9~15자리 허용). 문제가 없으면 빈 글자를 돌려줘요.
+function invoiceError(v, required) {
+  const raw = String(v == null ? "" : v).trim();
+  const clean = raw.replace(/[\s-]/g, "");
+  if (!clean) return required ? "송장번호를 적어 주세요" : "";
+  if (/[^0-9]/.test(clean)) return "송장번호는 숫자만 적어 주세요 (영문·기호는 안 돼요)";
+  if (clean.length < 9 || clean.length > 15) return "송장번호 자릿수가 이상해요. 보통 10~13자리예요";
+  if (/^(\d)\1+$/.test(clean)) return "올바른 송장번호가 아니에요. 다시 확인해 주세요";
+  return "";
+}
+function cleanInvoice(v) {
+  return String(v == null ? "" : v).replace(/[\s-]/g, "");
 }
 
 function trackSearchUrl(o) {
@@ -2803,9 +2948,17 @@ function AskCard({ cs, settings, showToast }) {
       setError("보내지 못했어요. 잠시 후 다시 해 주세요");
       return;
     }
+    const mineNow = { id: "local-" + Date.now(), message: msg.trim(), answer: "", created_at: new Date().toISOString() };
+    setMine((prev) => [mineNow, ...(prev || [])]);
     setMsg("");
     showToast("문의를 남겼어요. 답변은 여기서 확인할 수 있어요");
-    loadMine();
+    try {
+      const fresh = await cs.lookupAsks(name.trim(), phone4);
+      // 서버 목록에 방금 문의가 아직 없으면 화면에 남겨 둬요.
+      setMine(fresh.some((a) => a.message === mineNow.message) ? fresh : [mineNow, ...fresh]);
+    } catch (e) {
+      /* 방금 남긴 문의는 이미 보여요 */
+    }
   };
 
   return (
@@ -2957,7 +3110,13 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
           badRows.push({ n: idx + 1, why: !name ? "이름이 비어 있어요" : "전화번호가 4자리보다 짧아요 (" + (String(r[m.phone] || "").trim() || "빈칸") + ")" });
         return;
       }
-      const inv = m.inv ? String(r[m.inv] || "").replace(/[^0-9A-Za-z]/g, "").slice(0, 40) : "";
+      const invRaw = m.inv ? String(r[m.inv] || "").trim() : "";
+      if (invRaw && invoiceError(invRaw, false)) {
+        bad++;
+        if (badRows.length < 3) badRows.push({ n: idx + 1, why: "송장번호가 이상해요 (" + invRaw.slice(0, 20) + ")" });
+        return;
+      }
+      const inv = cleanInvoice(invRaw).slice(0, 40);
       good.push({
         name,
         p4,
@@ -3140,7 +3299,7 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
             {parsed.bad && pending.map.name && pending.map.phone ? (
               <div className="mt-3 rounded-xl bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900">
                 <p>
-                  <b>{parsed.bad}줄은 건너뛰어요.</b> 이름이나 전화번호가 없는 줄이에요.
+                  <b>{parsed.bad}줄은 건너뛰어요.</b> 이름·전화번호가 없거나 송장번호가 이상한 줄이에요.
                 </p>
                 <ul className="mt-1 text-[12.5px] text-amber-800">
                   {parsed.badRows.map((b) => (
@@ -3207,7 +3366,7 @@ function OrdersPanel({ orders, onImport, onSave, onDelete, onBulk, settings, onS
               <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">바뀜(송장·결제) {parsed.upd}</span>
               <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-neutral-600">그대로 {parsed.same}</span>
               {parsed.bad ? (
-                <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">건너뜀 {parsed.bad} (이름·번호 없음)</span>
+                <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700">건너뜀 {parsed.bad}</span>
               ) : null}
             </div>
             <div className="mt-3 max-h-64 overflow-auto rounded-xl border border-neutral-100">
@@ -3563,9 +3722,16 @@ function GroupShipModal({ group, onClose, onSave }) {
   const [courier, setCourier] = useState(first.courier || COURIER_NAMES[0]);
   const [inv, setInv] = useState(group.invs.length === 1 ? first.inv : "");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   const save = async () => {
+    const e = invoiceError(inv, false);
+    if (e) {
+      setErr(e);
+      return;
+    }
+    setErr("");
     setBusy(true);
-    const clean = String(inv || "").replace(/[^0-9A-Za-z]/g, "");
+    const clean = cleanInvoice(inv);
     const patch = { paid: paid || !!clean, shipDate };
     if (clean) {
       patch.inv = clean;
@@ -3631,9 +3797,23 @@ function GroupShipModal({ group, onClose, onSave }) {
           </select>
         </Field>
         <Field label="송장번호" hint="상자 하나로 같이 보냈다면 여기 한 번만">
-          <input value={inv} onChange={(e) => setInv(e.target.value.slice(0, 40))} inputMode="numeric" className={inputClass} />
+          <input
+            value={inv}
+            onChange={(e) => {
+              setInv(e.target.value.slice(0, 40));
+              setErr("");
+            }}
+            inputMode="numeric"
+            aria-invalid={!!err}
+            className={inputClass}
+          />
         </Field>
       </div>
+      {err ? (
+        <p className="text-[13px] font-medium text-rose-500" role="alert">
+          {err}
+        </p>
+      ) : null}
       {group.invs.length > 1 ? (
         <p className="text-[12.5px] text-amber-700">이미 상품별로 송장이 따로 들어가 있어요. 여기에 적으면 모든 상품이 같은 송장으로 바뀌어요.</p>
       ) : null}
@@ -3649,9 +3829,11 @@ function OrderEditModal({ order, onClose, onSave }) {
   const save = async () => {
     if (!d.name.trim()) return setErr("받는 분 이름을 적어 주세요");
     if (!/^\d{4}$/.test(d.p4)) return setErr("전화번호 뒤 4자리를 숫자로 적어 주세요");
+    const invErr = invoiceError(d.inv, false);
+    if (invErr) return setErr(invErr);
     setErr("");
     setBusy(true);
-    const inv = String(d.inv || "").replace(/[^0-9A-Za-z]/g, "");
+    const inv = cleanInvoice(d.inv);
     await onSave({ ...d, name: d.name.trim(), item: (d.item || "").trim(), inv, courier: inv ? d.courier : "", paid: !!d.paid || !!inv, shipDate: d.shipDate || "" });
     setBusy(false);
   };
@@ -3731,6 +3913,7 @@ function OrderEditModal({ order, onClose, onSave }) {
 
 function AsksPanel({ asks, onAnswer, onDelete, showToast }) {
   const [drafts, setDrafts] = useState({});
+  const [confirmId, setConfirmId] = useState("");
   const [show, setShow] = useState("open");
   const open = asks.filter((a) => !a.answer);
   const list = show === "open" ? open : asks;
@@ -3790,16 +3973,33 @@ function AsksPanel({ asks, onAnswer, onDelete, showToast }) {
                   {a.answer ? "답변 수정" : "답변 보내기"}
                 </button>
                 <span className="flex-1" />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const ok = await onDelete(a.id);
-                    if (ok) showToast("문의를 지웠어요");
-                  }}
-                  className="text-[12.5px] font-medium text-neutral-400 hover:text-rose-600"
-                >
-                  삭제
-                </button>
+                {confirmId === a.id ? (
+                  <span className="flex items-center gap-1.5" role="group" aria-label="문의 삭제 확인">
+                    <span className="text-[12.5px] text-rose-600">정말 지울까요?</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setConfirmId("");
+                        const ok = await onDelete(a.id);
+                        if (ok) showToast("문의를 지웠어요");
+                      }}
+                      className="rounded-lg bg-rose-600 px-3 py-1.5 text-[12.5px] font-semibold text-white"
+                    >
+                      지우기
+                    </button>
+                    <button type="button" onClick={() => setConfirmId("")} className="rounded-lg px-2 py-1.5 text-[12.5px] text-neutral-500">
+                      취소
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmId(a.id)}
+                    className="text-[12.5px] font-medium text-neutral-400 hover:text-rose-600"
+                  >
+                    삭제
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -3951,6 +4151,9 @@ export function CustomerView({ settings, onSubmit, fetchLookup, showToast, goAdm
           Powered by <RLWord /> · 나도 1분 만에 CS 센터 만들기
           <ArrowRight size={13} />
         </button>
+        <p className="mt-3 text-[11.5px] text-neutral-400">
+          <LegalLinks />
+        </p>
       </footer>
     </div>
   );
@@ -4019,7 +4222,9 @@ function FeeCell({ r, onRun, align = "center" }) {
     st === "rejected"
       ? { text: "[거절됨]", cls: "text-neutral-400" }
       : r.amount === 0
-      ? { text: "[판매자 부담]", cls: "text-neutral-500" }
+      ? r.paid
+        ? { text: "[확인 완료]", cls: "text-emerald-700" }
+        : { text: "[확인 대기]", cls: "text-orange-600" }
       : !r.paid
       ? { text: "[입금확인대기]", cls: "text-orange-600" }
       : { text: "[입금확인완료]", cls: "text-emerald-700" };
@@ -4035,13 +4240,13 @@ function FeeCell({ r, onRun, align = "center" }) {
       {r.depositor && r.depositor !== r.name ? (
         <p className="whitespace-nowrap text-[11.5px] text-neutral-500">입금자 {r.depositor}</p>
       ) : null}
-      {r.amount > 0 && st !== "rejected" ? (
+      {st !== "rejected" ? (
         <Toggle
           small
           checked={r.paid}
           disabled={locked}
           onChange={() => onRun(r, "togglePaid")}
-          label={r.name + " 입금 확인"}
+          label={r.name + (r.amount > 0 ? " 입금 확인" : " 접수 확인")}
         />
       ) : null}
     </div>
@@ -4064,10 +4269,10 @@ function StatusCell({ r, onRun }) {
   if (st === "waiting") {
     button = (
       <button type="button" onClick={() => onRun(r, "next")} className={base + "border-neutral-300 bg-white text-neutral-400"}>
-        입금 대기 중
+        {r.amount > 0 ? "입금 대기 중" : "확인 대기 중"}
       </button>
     );
-    sub = "입금 확인 후 진행";
+    sub = r.amount > 0 ? "입금 확인 후 진행" : "사장님 확인 후 수거";
   } else if (st === "progress") {
     button = (
       <button type="button" onClick={() => onRun(r, "next")} className={base + "border-blue-600 bg-blue-600 text-white"}>
@@ -4131,7 +4336,8 @@ const GRID =
 
 function rowAction(r) {
   const st = statusOf(r);
-  if (st === "waiting") return { label: "입금 확인", act: "togglePaid", cls: "bg-neutral-900 text-white" };
+  if (st === "waiting")
+    return { label: r.amount > 0 ? "입금 확인" : "접수 확인", act: "togglePaid", cls: "bg-neutral-900 text-white" };
   if (st === "progress") return { label: "수거 완료", act: "next", cls: "bg-blue-600 text-white" };
   if (st === "arrived")
     return { label: r.type === "exchange" ? "발송 완료" : "환불 완료", act: "next", cls: "bg-violet-600 text-white" };
@@ -4384,7 +4590,7 @@ const smallSelect =
 
 const STAGES = [
   { id: "all", label: "전체", badge: "", empty: "여기에 해당하는 접수가 없어요" },
-  { id: "waiting", label: "입금확인대기", badge: "bg-red-50 text-red-600", empty: "입금을 기다리는 접수가 없어요" },
+  { id: "waiting", label: "확인·입금 대기", badge: "bg-red-50 text-red-600", empty: "확인이나 입금을 기다리는 접수가 없어요" },
   { id: "progress", label: "수거진행", badge: "bg-blue-50 text-blue-600", empty: "돌아오는 중인 상품이 없어요" },
   { id: "arrived", label: "발송·환불", badge: "bg-violet-50 text-violet-700", empty: "보내거나 환불할 건이 없어요" },
   { id: "done", label: "완료", badge: "bg-emerald-50 text-emerald-700", empty: "끝난 건이 없어요" },
@@ -4923,7 +5129,7 @@ function Dashboard({ settings, requests, metrics, onOpen, onUpdate, onDelete, sh
             {guide ? (
               <ol className="mt-2 list-decimal space-y-1 pl-4 text-neutral-600">
                 <li>내 링크를 복사해 인스타 프로필에 붙여요.</li>
-                <li>입금이 들어오면 입금 확인을 눌러요. 수거 단계로 넘어가요.</li>
+                <li>입금이 들어오면 입금 확인을, 판매자 부담 접수는 내용을 보고 접수 확인을 눌러요. 수거 단계로 넘어가요.</li>
                 <li>택배사에 회수를 접수하고, 상품이 도착하면 수거 완료를 눌러요.</li>
                 <li>교환품을 보내거나 환불한 뒤 버튼을 누르면 완료 탭으로 가요.</li>
                 <li>잘못 눌렀다면 되돌리기로 한 단계 돌아가요.</li>
@@ -4957,7 +5163,7 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
   const isExchange = r.type === "exchange";
   const typeLabel = isExchange ? "교환" : "반품";
   const statusLabel = {
-    waiting: "입금확인대기",
+    waiting: r.amount > 0 ? "입금확인대기" : "접수 확인 대기",
     progress: "수거진행중",
     arrived: isExchange ? "교환품 발송 대기" : "환불 대기",
     done: "처리 완료",
@@ -4970,6 +5176,7 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
   const [memo, setMemo] = useState(r.memo || "");
   const [outCourier, setOutCourier] = useState(r.outCourier || COURIERS[0].name);
   const [outInvoice, setOutInvoice] = useState(r.outInvoice || "");
+  const [outErr, setOutErr] = useState("");
   const rejectRef = useRef(null);
 
   useEffect(() => {
@@ -4994,7 +5201,7 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
 
   const primary =
     st === "waiting"
-      ? { label: "입금 확인", action: "togglePaid" }
+      ? { label: r.amount > 0 ? "입금 확인" : "접수 확인", action: "togglePaid" }
       : st === "progress" || st === "arrived"
       ? { label: nextLabel(r), action: "next" }
       : null;
@@ -5305,7 +5512,11 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
             </div>
             <input
               value={outInvoice}
-              onChange={(e) => setOutInvoice(e.target.value.replace(/[^\d-]/g, ""))}
+              onChange={(e) => {
+                setOutInvoice(e.target.value.replace(/[^\d\s-]/g, ""));
+                setOutErr("");
+              }}
+              aria-invalid={!!outErr}
               placeholder="송장번호"
               inputMode="numeric"
               aria-label="교환품 송장번호"
@@ -5315,14 +5526,26 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
               type="button"
               disabled={outInvoice === (r.outInvoice || "") && outCourier === (r.outCourier || COURIERS[0].name)}
               onClick={() => {
-                onPatch(r.id, { outInvoice: outInvoice.trim(), outCourier });
-                showToast(outInvoice.trim() ? "송장을 저장했어요" : "송장을 지웠어요");
+                const v = cleanInvoice(outInvoice);
+                const err = invoiceError(v, !r.outInvoice);
+                if (err) {
+                  setOutErr(err);
+                  return;
+                }
+                setOutInvoice(v);
+                onPatch(r.id, { outInvoice: v, outCourier });
+                showToast(v ? "송장을 저장했어요" : "송장을 지웠어요");
               }}
               className="shrink-0 rounded-lg bg-neutral-900 px-3.5 text-[13px] font-semibold text-white disabled:opacity-30"
             >
               저장
             </button>
           </div>
+          {outErr ? (
+            <p className="mt-1.5 text-[12.5px] font-medium text-rose-500" role="alert">
+              {outErr}
+            </p>
+          ) : null}
         </section>
       ) : null}
 
@@ -5356,10 +5579,12 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
 
       <section className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 p-4">
         <div>
-          <p className="text-[12px] font-semibold text-neutral-900">배송비 입금 확인</p>
+          <p className="text-[12px] font-semibold text-neutral-900">{r.amount > 0 ? "배송비 입금 확인" : "접수 확인"}</p>
           <p className="mt-1 text-[12px] text-neutral-500">
             {r.amount === 0
-              ? "판매자 부담이라 입금받을 배송비가 없어요."
+              ? st === "arrived" || st === "done"
+                ? "수거가 끝난 접수예요."
+                : "판매자 부담 접수예요. 내용을 확인하고 켜면 수거진행으로 넘어가요."
               : st === "arrived" || st === "done"
               ? "수거가 끝나서 입금 상태는 잠겨 있어요."
               : "왕복 배송비 " + won(r.amount) + " 입금을 확인하면 켜 주세요."}
@@ -5370,12 +5595,12 @@ function DetailModal({ r, ids, onNavigate, onClose, onAction, onDelete, onPatch,
             </p>
           ) : null}
         </div>
-        {r.amount > 0 && st !== "rejected" ? (
+        {st !== "rejected" ? (
           <Toggle
             checked={r.paid}
             disabled={st === "arrived" || st === "done"}
             onChange={() => onAction(r.id, "togglePaid")}
-            label="입금 확인"
+            label={r.amount > 0 ? "입금 확인" : "접수 확인"}
           />
         ) : null}
       </section>
@@ -6566,10 +6791,8 @@ export function Landing({ onStart, onDemo }) {
 
       <footer className="border-t border-neutral-200 py-8 text-center text-[12px] text-neutral-400">
         <p className="text-[14px]"><RLWord /></p>
-        <p className="mt-2 flex justify-center gap-3">
-          <span>이용약관</span>
-          <span>개인정보 처리방침</span>
-          <span>문의하기</span>
+        <p className="mt-2 flex justify-center">
+          <LegalLinks />
         </p>
         <p className="mt-2">© 2026 ReturnLink</p>
       </footer>
@@ -7403,17 +7626,23 @@ export default function ReturnLinkApp({ initialView = "landing", demo = false })
   };
 
   // 데모용 주문·송장·문의 (이 기기에만 저장)
+  const asksRef = useRef(asks);
+  asksRef.current = asks;
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
   const sameName = (a, b) => String(a).replace(/\s/g, "") === String(b).replace(/\s/g, "");
   const demoCs = {
     lookupOrders: async (name, p4) =>
-      orders
+      ordersRef.current
         .filter((o) => sameName(o.name, name) && o.p4 === p4)
         .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
     submitAsk: async (name, p4, message) => {
-      setAsks((prev) => [{ id: "a-" + Date.now(), name, p4, message, answer: "", created_at: new Date().toISOString() }, ...prev]);
+      const a = { id: "a-" + Date.now(), name, p4, message, answer: "", created_at: new Date().toISOString() };
+      asksRef.current = [a, ...asksRef.current];
+      setAsks((prev) => [a, ...prev]);
       return true;
     },
-    lookupAsks: async (name, p4) => asks.filter((a) => a.name === name && a.p4 === p4),
+    lookupAsks: async (name, p4) => asksRef.current.filter((a) => a.name === name && a.p4 === p4),
   };
   const demoImport = async (items) => {
     const stamp0 = Date.now();
